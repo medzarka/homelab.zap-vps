@@ -43,7 +43,7 @@ validate_configuration() {
         "CONTAINER_NAME" "CONTAINER_DESCRIPTION" "IMAGE_NAME" "IMAGE_NEEDS_BUILD"
         "MEMORY_LIMIT" "CPU_QUOTA" "CPU_SHARES" "BLKIO_WEIGHT"
         "ENABLE_REDIS" "ENABLE_POSTGRESQL" "ENABLE_MONGODB" "USE_OAUTH_PROXY"
-        "HEALTH_CHECK_ENABLED"
+        "HEALTH_CHECK_ENABLED" "IMAGE_PARAMETERS"
     )
     
     info "🔍 Validating configuration variables..."
@@ -650,6 +650,12 @@ deploy_container() {
     
     # Add image name
     cmd+=("$IMAGE_NAME")
+
+    # ── Add custom image parameters if specified
+    if [[ -n "${IMAGE_PARAMETERS:-}" ]]; then
+        # shellcheck disable=SC2206
+        cmd+=( $IMAGE_PARAMETERS )
+    fi
     
     # Execute the command
     "${cmd[@]}"

@@ -23,6 +23,9 @@ POD_NAME=""                              # Not used for standalone containers
 PUBLISHED_PORTS=()                       # Tunnel connects outbound to Cloudflare
 NETWORK_NAME=""                          # Use default bridge network
 
+# ── Custom Image Parameters 
+IMAGE_PARAMETERS="tunnel --metrics localhost:8081 --no-autoupdate run"
+
 # ── Resource Limits (optimized for tunnel)
 MEMORY_LIMIT="512m"                      # 512MB RAM (Cloudflare recommended)
 MEMORY_SWAP="1024m"                      # Allow 1GB swap if needed
