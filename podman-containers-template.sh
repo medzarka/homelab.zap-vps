@@ -744,7 +744,7 @@ generate_systemd_service() {
     fi
     
     # Install service
-    mv "$service_name" /etc/systemd/system/
+    mv "$service_name" ${HOME}/.config/systemd/user/
     systemctl --user daemon-reload
     systemctl --user enable "$service_name"
     systemctl --user start "$service_name"
