@@ -15,7 +15,7 @@ set -Eeuo pipefail
 CONTAINER_NAME="cloudflare-tunnel"
 CONTAINER_DESCRIPTION="Cloudflare Tunnel (cloudflared)"
 IMAGE_NAME="cloudflare/cloudflared:latest"
-IMAGE_NEEDS_BUILD=true                    # Build custom image with proper entrypoint
+IMAGE_NEEDS_BUILD=false                    # Build custom image with proper entrypoint
 POD_MODE=false                           # Simple standalone container
 POD_NAME=""                              # Not used for standalone containers
 
