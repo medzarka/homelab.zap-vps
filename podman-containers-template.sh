@@ -720,7 +720,7 @@ deploy_oauth_proxy() {
     )
     
     # Add OAuth image
-    oauth_cmd+=("quay.io/oauth2-proxy/oauth2-proxy:v7.5.1")
+    oauth_cmd+=("quay.io/oauth2-proxy/oauth2-proxy:latest-alpine")
     
     # Execute OAuth command
     "${oauth_cmd[@]}"

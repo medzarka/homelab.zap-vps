@@ -12,10 +12,10 @@ set -Eeuo pipefail
 #  📦 VSCODE SERVER POD CONFIGURATION
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ── Basic Container Info
-CONTAINER_NAME="vscode-app"
+CONTAINER_NAME="vscode-server"
 CONTAINER_DESCRIPTION="VS Code Server with OAuth Protection"
-IMAGE_NAME="lscr.io/linuxserver/code-server:latest"
-IMAGE_NEEDS_BUILD=true                   # Build custom image with dev tools
+IMAGE_NAME="localhost/code-server:latest"
+IMAGE_NEEDS_BUILD=true                  # Build custom image with dev tools
 POD_MODE=true                           # Deploy as pod with OAuth proxy
 POD_NAME="pod-vscode"
 
@@ -23,7 +23,7 @@ POD_NAME="pod-vscode"
 PUBLISHED_PORTS=(
     "8443:8443"                         # VS Code Server port
 )
-NETWORK_NAME=""                         # Use default bridge network
+NETWORK_NAME="podman-network"           # Use default bridge network
 
 # ── Resource Limits (development environment needs more resources)
 MEMORY_LIMIT="1536m"                    # 1.5GB RAM for VS Code
@@ -66,8 +66,8 @@ ENV_VARS_OPTIONAL=(
 
 # ── Google OAuth2 Proxy (ENABLED for secure access)
 USE_OAUTH_PROXY=true
-OAUTH_EXTERNAL_PORT="8080"              # External OAuth proxy port
-OAUTH_INTERNAL_PORT="8080"              # Internal OAuth proxy port  
+OAUTH_EXTERNAL_PORT="4180"              # External OAuth proxy port
+OAUTH_INTERNAL_PORT="4180"              # Internal OAuth proxy port  
 OAUTH_UPSTREAM_PORT="8443"              # VS Code Server port
 OAUTH_BRANDING_TITLE="VS Code Server"   # Title shown on login page
 OAUTH_BRANDING_FOOTER="ZAP-VPS Development Environment"  # Footer text
