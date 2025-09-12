@@ -436,6 +436,10 @@ setup_pod() {
     if $USE_OAUTH_PROXY; then
         port_args+=("--publish" "${OAUTH_EXTERNAL_PORT:-8080}:${OAUTH_INTERNAL_PORT:-8080}")
     fi
+
+    if [[ -n "${NETWORK_NAME:-}" ]]; then
+        port_args+=("--network" "$NETWORK_NAME")
+    fi
     
     # Create new pod
     podman pod create \
