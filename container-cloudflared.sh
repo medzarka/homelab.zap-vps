@@ -15,7 +15,7 @@ set -Eeuo pipefail
 CONTAINER_NAME="cloudflare-tunnel"
 CONTAINER_DESCRIPTION="Cloudflare Tunnel (cloudflared)"
 IMAGE_NAME="cloudflare/cloudflared:latest"
-IMAGE_NEEDS_BUILD=false                    # Build custom image with proper entrypoint
+IMAGE_NEEDS_BUILD=true                   # Build custom image with proper entrypoint
 POD_MODE=false                           # Simple standalone container
 POD_NAME=""                              # Not used for standalone containers
 
@@ -85,14 +85,24 @@ HEALTH_CHECK_RETRIES=3                  # Retry 3 times before marking unhealthy
 
 # ── Custom Containerfile (sets proper entrypoint for tunnel)
 CONTAINERFILE_CONTENT='
-FROM cloudflare/cloudflared:latest
+FROM alpine:latest
 
-# Set environment variable placeholder
-ENV TUNNEL_TOKEN=""
+# --- Packages ---------------------------------------------------------------
+RUN set -e \
+ && apk add --no-cache curl ca-certificates wget
 
-# Use tunnel run as the default command when TUNNEL_TOKEN is provided
-# The template will pass TUNNEL_TOKEN via --env-file
-ENTRYPOINT ["cloudflared", "tunnel", "--no-autoupdate", "run"]
+# --- Download architecture-matched cloudflared ------------------------------
+ARG CF_URL
+RUN set -e \
+ && case "$(uname -m)" in \
+      x86_64)  CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" ;; \
+      aarch64) CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64" ;; \
+      *) echo "Unsupported arch: $(uname -m)" && exit 1 ;; \
+    esac \
+ && wget -qO /usr/bin/cloudflared "${CF_URL}" \
+ && chmod +x /usr/bin/cloudflared
+
+ENTRYPOINT ["/usr/bin/cloudflared"]
 '
 
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
