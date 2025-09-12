@@ -12,16 +12,20 @@ set -Eeuo pipefail
 #  📦 TAILSCALE VPN CONFIGURATION
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ── Basic Container Info
-CONTAINER_NAME="tailscale"
+CONTAINER_NAME="tailscale-tunnel"
 CONTAINER_DESCRIPTION="Tailscale VPN Client"
 IMAGE_NAME="tailscale/tailscale:latest"
-IMAGE_NEEDS_BUILD=false                  # Use official image directly
+IMAGE_NEEDS_BUILD=false                 # Use official image directly
 POD_MODE=false                          # Simple standalone container
 POD_NAME=""                             # Not used for standalone containers
 
 # ── Network & Ports (VPN client - no published ports needed)
 PUBLISHED_PORTS=()                      # VPN operates at network layer
-NETWORK_NAME=""                         # Use default bridge network
+NETWORK_NAME="podman-network"           # Use default bridge network
+
+# ── Custom Image Parameters 
+IMAGE_PARAMETERS=""
+
 
 # ── Resource Limits (optimized for VPN client)
 MEMORY_LIMIT="256m"                     # 256MB RAM (lightweight VPN client)
@@ -58,7 +62,7 @@ ENV_VARS_REQUIRED=(
 
 # ── Optional Environment Variables (with defaults)
 ENV_VARS_OPTIONAL=(
-    "TZ:Europe/Paris"                    # Timezone
+    "TZ:Europe/Paris"                   # Timezone
     "TS_HOSTNAME:zap-vps"               # Hostname for this node
     "TS_ACCEPT_DNS:true"                # Accept DNS configuration from Tailscale
     "TS_EXTRA_ARGS:--advertise-exit-node" # Advertise as exit node

@@ -21,7 +21,7 @@ POD_NAME=""                              # Not used for standalone containers
 
 # ── Network & Ports (outbound only - no published ports needed)
 PUBLISHED_PORTS=()                       # Tunnel connects outbound to Cloudflare
-NETWORK_NAME=""                          # Use default bridge network
+NETWORK_NAME="podman-network"            # Use default bridge network
 
 # ── Custom Image Parameters 
 IMAGE_PARAMETERS="tunnel --metrics localhost:8081 --no-autoupdate run"
