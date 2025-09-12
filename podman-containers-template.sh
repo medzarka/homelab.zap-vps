@@ -744,9 +744,10 @@ generate_systemd_service() {
     fi
     
     # Install service
-    sudo mv "$service_name" /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable "$service_name"
+    mv "$service_name" /etc/systemd/system/
+    systemctl --user daemon-reload
+    systemctl --user enable "$service_name"
+    systemctl --user start "$service_name"
     
     okay "Systemd service installed: ${service_name}"
     info "Start service: sudo systemctl start ${service_name}"
