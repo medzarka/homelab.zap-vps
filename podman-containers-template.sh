@@ -730,34 +730,59 @@ deploy_oauth_proxy() {
 
 # ── Systemd Service Generation
 generate_systemd_service() {
-    info "Generating systemd service..."
-    
-    local service_name
-    if ${POD_MODE:-false}; then
-        service_name="container-${POD_NAME}.service"
-        podman generate systemd \
-            --name "$POD_NAME" \
-            --files \
-            --new \
-            --restart-policy=always
-    else
-        service_name="container-${CONTAINER_NAME}.service"
-        podman generate systemd \
-            --name "$CONTAINER_NAME" \
-            --files \
-            --new \
-            --restart-policy=always
-    fi
-    
-    # Install service
-    mv "$service_name" ${HOME}/.config/systemd/user/
-    systemctl --user daemon-reload
-    systemctl --user enable "$service_name"
-    systemctl --user start "$service_name"
-    
-    okay "Systemd service installed: ${service_name}"
-    info "Start service: sudo systemctl start ${service_name}"
+    info "Generating user systemd service..."
+
+    # Ensure user systemd directory exists
+    local user_systemd_dir="${HOME}/.config/systemd/user"
+    mkdir -p "$user_systemd_dir"
+
+    # Use subshell - directory change is automatically contained
+    (
+        # Change to user systemd directory for file generation
+        cd "$user_systemd_dir"
+        
+        if ${POD_MODE:-false}; then
+            # Generate systemd files for pod
+            podman generate systemd \
+                --name "$POD_NAME" \
+                --files \
+                --new \
+                --restart-policy=always
+            
+            # Enable user lingering (allows services to start at boot)
+            loginctl enable-linger "$USER" 2>/dev/null || true
+            
+            # Reload user daemon and enable service
+            systemctl --user daemon-reload
+            systemctl --user enable "pod-${POD_NAME}.service"
+            
+            okay "User systemd service installed: pod-${POD_NAME}.service"
+            info "Service location: ${user_systemd_dir}/pod-${POD_NAME}.service"
+        else
+            # Generate systemd files for standalone container
+            podman generate systemd \
+                --name "$CONTAINER_NAME" \
+                --files \
+                --new \
+                --restart-policy=always
+            
+            # Enable user lingering
+            loginctl enable-linger "$USER" 2>/dev/null || true
+            
+            # Reload user daemon and enable service
+            systemctl --user daemon-reload
+            systemctl --user enable "container-${CONTAINER_NAME}.service"
+            
+            okay "User systemd service installed: container-${CONTAINER_NAME}.service"
+            info "Service location: ${user_systemd_dir}/container-${CONTAINER_NAME}.service"
+        fi
+    )
+    # Directory automatically restored after subshell
+
+    info "Use 'systemctl --user start <service-name>' to start the service"
+    info "Use 'systemctl --user status <service-name>' to check status"
 }
+
 
 # ── Status Display
 show_deployment_status() {
@@ -770,6 +795,7 @@ show_deployment_status() {
     echo "Image:           ${IMAGE_NAME}"
     echo "Data Directory:  ${DATA_ROOT}"
     echo "User Mapping:    ${MGRSYS_UID}:${MGRSYS_GID} (${MGRSYS_USER})"
+    echo "Systemd Mode:    User services (--user)"
     
     if [[ ${#PUBLISHED_PORTS[@]} -gt 0 ]]; then
         echo "Published Ports:"
@@ -816,6 +842,20 @@ show_deployment_status() {
         $ENABLE_REDIS && echo "REDIS_URL=${REDIS_URL}"
         $ENABLE_POSTGRESQL && echo "DATABASE_URL=${POSTGRESQL_URL}"
         $ENABLE_MONGODB && echo "MONGODB_URL=${MONGODB_URL}"
+    fi
+
+    echo "════════════════════════════════════════"
+    echo "Management Commands:"
+    if ${POD_MODE:-false}; then
+        echo "  Start:   systemctl --user start pod-${POD_NAME}.service"
+        echo "  Stop:    systemctl --user stop pod-${POD_NAME}.service" 
+        echo "  Status:  systemctl --user status pod-${POD_NAME}.service"
+        echo "  Logs:    journalctl --user -u pod-${POD_NAME}.service -f"
+    else
+        echo "  Start:   systemctl --user start container-${CONTAINER_NAME}.service"
+        echo "  Stop:    systemctl --user stop container-${CONTAINER_NAME}.service"
+        echo "  Status:  systemctl --user status container-${CONTAINER_NAME}.service" 
+        echo "  Logs:    journalctl --user -u container-${CONTAINER_NAME}.service -f"
     fi
 }
 
