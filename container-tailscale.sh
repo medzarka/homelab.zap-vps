@@ -24,7 +24,7 @@ PUBLISHED_PORTS=()                      # VPN operates at network layer
 NETWORK_NAME="podman-network"           # Use default bridge network
 
 # ── Custom Image Parameters 
-IMAGE_PARAMETERS=""
+IMAGE_PARAMETERS=" "
 
 
 # ── Resource Limits (optimized for VPN client)
