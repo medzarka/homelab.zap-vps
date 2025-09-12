@@ -78,7 +78,7 @@ EXTRA_OPTIONS=(
 
 # ── Health Check (process-based check)
 HEALTH_CHECK_ENABLED=true
-HEALTH_CHECK_CMD="pgrep cloudflared || exit 1"  # Check if cloudflared process is running
+HEALTH_CHECK_CMD="curl -f http://localhost:8081/ready || exit 1" # "pgrep cloudflared || exit 1"  # Check if cloudflared process is running
 HEALTH_CHECK_INTERVAL="60s"             # Check every minute
 HEALTH_CHECK_TIMEOUT="30s"              # 30 second timeout
 HEALTH_CHECK_RETRIES=3                  # Retry 3 times before marking unhealthy
