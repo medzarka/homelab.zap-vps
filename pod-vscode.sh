@@ -25,6 +25,9 @@ PUBLISHED_PORTS=(
 )
 NETWORK_NAME="podman-network"           # Use default bridge network
 
+# ── Custom Image Parameters 
+IMAGE_PARAMETERS=" "
+
 # ── Resource Limits (development environment needs more resources)
 MEMORY_LIMIT="1536m"                    # 1.5GB RAM for VS Code
 MEMORY_SWAP="2048m"                     # Allow 2GB swap for heavy development
