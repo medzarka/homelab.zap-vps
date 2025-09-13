@@ -409,6 +409,7 @@ setup_pod() {
     info "Setting up pod: ${POD_NAME}..."
     
     # Remove existing pod
+    systemctl --user stop "pod-${POD_NAME}.service" 2>/dev/null || true
     podman pod exists "$POD_NAME" && podman pod rm -f "$POD_NAME"
     
     # Build port mapping arguments
@@ -454,6 +455,7 @@ deploy_service_containers() {
     # Deploy Redis
     if $ENABLE_REDIS; then
         info "Deploying Redis..."
+        systemctl --user stop "container-${CONTAINER_NAME}-redis.service" 2>/dev/null || true
         podman rm -f "${CONTAINER_NAME}-redis" 2>/dev/null || true
 
         podman run -d \
@@ -478,6 +480,7 @@ deploy_service_containers() {
     # Deploy PostgreSQL
     if $ENABLE_POSTGRESQL; then
         info "Deploying PostgreSQL..."
+        systemctl --user stop "container-${CONTAINER_NAME}-postgres.service" 2>/dev/null || true
         podman rm -f "${CONTAINER_NAME}-postgres" 2>/dev/null || true
         
         podman run -d \
@@ -505,6 +508,7 @@ deploy_service_containers() {
     # Deploy MongoDB
     if $ENABLE_MONGODB; then
         info "Deploying MongoDB..."
+        systemctl --user stop "container-${CONTAINER_NAME}-mongodb.service" 2>/dev/null || true
         podman rm -f "${CONTAINER_NAME}-mongodb" 2>/dev/null || true
         
         podman run -d \
@@ -532,7 +536,8 @@ deploy_service_containers() {
         if [[ -n "$container_spec" ]]; then
             IFS=':' read -r name image tag port memory cpu envs volumes health <<< "$container_spec"
             info "Deploying extra container: ${name}..."
-            
+
+            systemctl --user stop "container-${CONTAINER_NAME}-${name}.service" 2>/dev/null || true
             podman rm -f "${CONTAINER_NAME}-${name}" 2>/dev/null || true
             
             local cmd=(
@@ -596,6 +601,7 @@ deploy_container() {
     info "Deploying ${CONTAINER_DESCRIPTION}..."
     
     # Clean up existing container
+    systemctl --user stop "container-${CONTAINER_NAME}.service" 2>/dev/null || true
     podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
     
     # Build base command
@@ -766,6 +772,7 @@ generate_systemd_service() {
             # Reload user daemon and enable service
             systemctl --user daemon-reload
             systemctl --user enable "pod-${POD_NAME}.service"
+            systemctl --user start "pod-${POD_NAME}.service"
             
             okay "User systemd service installed: pod-${POD_NAME}.service"
             info "Service location: ${user_systemd_dir}/pod-${POD_NAME}.service"
