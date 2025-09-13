@@ -87,7 +87,8 @@ ENV_VARS_OPTIONAL=(
     "ENABLED_LINKED_FILE_TYPES:project_file,project_output_file" # File types
     "ENABLE_CONVERSIONS:true"                                   # Enable file conversions
     "EMAIL_CONFIRMATION_DISABLED:true"                         # Disable email confirmation
-    "OVERLEAF_DISABLE_SIGNUPS:true"                           # Admin-only user creation
+    "OVERLEAF_DISABLE_SIGNUPS:true"    
+    "ALLOW_MONGO_ADMIN_CHECK_FAILURES:true"                       # Admin-only user creation
 )
 
 
