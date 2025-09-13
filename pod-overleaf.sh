@@ -30,7 +30,7 @@ NETWORK_NAME="podman-network"           # Custom network for services
 
 
 # ── Custom Image Parameters 
-IMAGE_PARAMETERS=""                     # Use default entrypoint
+IMAGE_PARAMETERS=" "                     # Use default entrypoint
 
 
 # ── Resource Limits (LaTeX compilation needs generous resources)
