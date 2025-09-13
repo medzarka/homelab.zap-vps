@@ -113,20 +113,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         shellcheck pandoc openssh-client \
         texlive-latex-base texlive-fonts-recommended \
         texlive-latex-extra texlive-lang-arabic \
-        lmodern fonts-noto && \
+        lmodern fonts-noto \
+        fonts-firacode fonts-sourcecodepro && \
     echo "abc ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/90-abc-nopasswd && \
     chmod 0440 /etc/sudoers.d/90-abc-nopasswd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Generate SSH key pair for abc user
-RUN mkdir -p /home/abc/.ssh && \
-    if [ ! -f /home/abc/.ssh/id_rsa ]; then \
-        ssh-keygen -t rsa -b 4096 -N "" -f /home/abc/.ssh/id_rsa; \
+# Generate SSH key pair for abc user (using /config)
+RUN mkdir -p /config/.ssh && \
+    if [ ! -f /config/.ssh/id_ed25519 ]; then \
+        ssh-keygen -t ed25519 -N "" -f /config/.ssh/id_ed25519; \
     fi && \
-    chmod 700 /home/abc/.ssh && \
-    chmod 600 /home/abc/.ssh/id_rsa* && \
-    chown -R abc:abc /home/abc
+    chmod 700 /config/.ssh && \
+    chmod 600 /config/.ssh/id_ed25519* && \
+    chown -R abc:abc /config
 
 # Create workspace with proper permissions
 RUN mkdir -p /config/workspace && \
