@@ -137,45 +137,28 @@ CONTAINERFILE_CONTENT=''
 #  📝 OVERLEAF-SPECIFIC MONGODB INITIALIZATION
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ── Override setup_service_env_vars to add Overleaf-specific MongoDB configuration
+# ── Override setup_service_env_vars for passwordless setup
 setup_service_env_vars() {
-    info "Setting up Overleaf service credentials..."
+    info "Setting up Overleaf service credentials (passwordless)..."
     
-    # Standard Redis configuration
+    # Passwordless Redis configuration
     if $ENABLE_REDIS; then
-        if [[ -z "${REDIS_PASSWORD:-}" ]]; then
-            REDIS_PASSWORD=$(generate_password)
-        fi
-        grep -q "^REDIS_PASSWORD=" "$ENV_FILE" || echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> "$ENV_FILE"
-        REDIS_URL="redis://:${REDIS_PASSWORD}@localhost:6379"
-        grep -q "^REDIS_URL=" "$ENV_FILE" || echo "REDIS_URL=${REDIS_URL}" >> "$ENV_FILE"
-        
-        # Overleaf Redis configuration
         grep -q "^OVERLEAF_REDIS_HOST=" "$ENV_FILE" || echo "OVERLEAF_REDIS_HOST=localhost" >> "$ENV_FILE"
         grep -q "^OVERLEAF_REDIS_PORT=" "$ENV_FILE" || echo "OVERLEAF_REDIS_PORT=6379" >> "$ENV_FILE"
-        grep -q "^OVERLEAF_REDIS_PASSWORD=" "$ENV_FILE" || echo "OVERLEAF_REDIS_PASSWORD=${REDIS_PASSWORD}" >> "$ENV_FILE"
+        REDIS_URL="redis://localhost:6379"
+        grep -q "^REDIS_URL=" "$ENV_FILE" || echo "REDIS_URL=${REDIS_URL}" >> "$ENV_FILE"
     fi
     
-    # MongoDB configuration for Overleaf
+    # Passwordless MongoDB configuration for Overleaf
     if $ENABLE_MONGODB; then
-        if [[ -z "${MONGODB_PASSWORD:-}" ]]; then
-            MONGODB_PASSWORD=$(generate_password)
-        fi
-        grep -q "^MONGO_INITDB_ROOT_USERNAME=" "$ENV_FILE" || echo "MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-overleaf}" >> "$ENV_FILE"
-        grep -q "^MONGO_INITDB_ROOT_PASSWORD=" "$ENV_FILE" || echo "MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}" >> "$ENV_FILE"
-        grep -q "^MONGO_INITDB_DATABASE=" "$ENV_FILE" || echo "MONGO_INITDB_DATABASE=${MONGODB_DB:-overleaf}" >> "$ENV_FILE"
-        
-        # ✅ CRITICAL: Add the OVERLEAF_MONGO_URL that the application actually uses
-        OVERLEAF_MONGO_URL="mongodb://localhost:27017/${MONGODB_DB:-overleaf}?replicaSet=overleaf"
+        # Simple MongoDB URL without authentication
+        OVERLEAF_MONGO_URL="mongodb://localhost:27017/${MONGODB_DB:-overleaf}"
         grep -q "^OVERLEAF_MONGO_URL=" "$ENV_FILE" || echo "OVERLEAF_MONGO_URL=${OVERLEAF_MONGO_URL}" >> "$ENV_FILE"
         
         # Generic MongoDB URL for template compatibility
         MONGODB_URL="$OVERLEAF_MONGO_URL"
         grep -q "^MONGODB_URL=" "$ENV_FILE" || echo "MONGODB_URL=${MONGODB_URL}" >> "$ENV_FILE"
     fi
-    
-    # Create MongoDB initialization scripts
-    create_mongo_replica_set_script
 }
 
 # ── Initialize MongoDB Replica Set for Overleaf
@@ -250,11 +233,11 @@ EOC
     info "MongoDB replica set scripts created"
 }
 
-# ── Override deploy_service_containers to add MongoDB replica set initialization
+# ── Override deploy_service_containers for passwordless setup
 deploy_service_containers() {
-    # Deploy Redis for Overleaf sessions
+    # Deploy passwordless Redis
     if $ENABLE_REDIS; then
-        info "Deploying Redis for Overleaf sessions..."
+        info "Deploying passwordless Redis for Overleaf..."
         systemctl --user stop "container-${CONTAINER_NAME}-redis.service" 2>/dev/null || true
         podman rm -f "${CONTAINER_NAME}-redis" 2>/dev/null || true
 
@@ -267,19 +250,18 @@ deploy_service_containers() {
             --cpu-period 100000 \
             --cpu-quota "${REDIS_CPU_QUOTA:-25000}" \
             --volume "${DATA_ROOT}/redis-data:/data:Z" \
-            --env "REDIS_PASSWORD=${REDIS_PASSWORD}" \
-            --health-cmd "redis-cli --no-auth-warning -a \$REDIS_PASSWORD ping" \
+            --health-cmd "redis-cli ping" \
             --health-interval 30s \
             --health-timeout 10s \
             --health-retries 3 \
-            redis:alpine redis-server --requirepass "$REDIS_PASSWORD" --save 60 1 --loglevel warning
+            redis:alpine redis-server --save 60 1 --loglevel warning
         
-        okay "Redis deployed for Overleaf"
+        okay "Passwordless Redis deployed for Overleaf"
     fi
     
-    # Deploy MongoDB with Overleaf replica set
+    # Deploy passwordless MongoDB
     if $ENABLE_MONGODB; then
-        info "Deploying MongoDB with Overleaf replica set..."
+        info "Deploying passwordless MongoDB for Overleaf..."
         systemctl --user stop "container-${CONTAINER_NAME}-mongodb.service" 2>/dev/null || true
         podman rm -f "${CONTAINER_NAME}-mongodb" 2>/dev/null || true
         
@@ -292,21 +274,13 @@ deploy_service_containers() {
             --cpu-period 100000 \
             --cpu-quota "${MONGODB_CPU_QUOTA:-50000}" \
             --volume "${DATA_ROOT}/mongodb-data:/data/db:Z" \
-            --volume "${DATA_ROOT}/mongodb-init/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro,Z" \
-            --volume "${DATA_ROOT}/mongodb-init/healthcheck.js:/healthcheck.js:ro,Z" \
-            --env "MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-overleaf}" \
-            --env "MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}" \
-            --env "MONGO_INITDB_DATABASE=${MONGODB_DB:-overleaf}" \
-            --health-cmd "mongosh --norc --quiet --file /healthcheck.js" \
+            --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'" \
             --health-interval 30s \
             --health-timeout 10s \
             --health-retries 3 \
-            mongo:6.0 --replSet overleaf
+            mongo:6.0 --bind_ip_all
         
-        okay "MongoDB with replica set deployed for Overleaf"
-        
-        # ✅ CRITICAL: Initialize the replica set after MongoDB starts
-        initialize_mongo_replica_set
+        okay "Passwordless MongoDB deployed for Overleaf"
     fi
 }
 
