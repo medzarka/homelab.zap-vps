@@ -125,7 +125,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /usr/local/share/fonts/source-code-pro && \
     curl -L https://github.com/adobe-fonts/source-code-pro/releases/download/2.042R-u%2F1.062R-i%2F1.026R-vf/TTF-source-code-pro-2.042R-u_1.062R-i.zip -o /tmp/source-code-pro.zip && \
     unzip /tmp/source-code-pro.zip -d /tmp/source-code-pro && \
-    cp /tmp/source-code-pro/*.ttf /usr/local/share/fonts/source-code-pro/ && \
+    cp /tmp/source-code-pro/TTF/*.ttf /usr/local/share/fonts/source-code-pro/ && \
     rm -rf /tmp/source-code-pro*
 
 # Manually install Fira Mono fonts (if fonts-firamono not available)
