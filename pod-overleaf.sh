@@ -32,11 +32,22 @@ OVERLEAF_REDIS_HOST=localhost
 OVERLEAF_APP_NAME=Overleaf
 ENABLED_LINKED_FILE_TYPES=project_file,project_output_file
 ENABLE_CONVERSIONS=true
-EMAIL_CONFIRMATION_DISABLED=true
+EMAIL_CONFIRMATION_DISABLED=false
 OVERLEAF_SITE_URL=https://overleaf.bluewave.work
 OVERLEAF_ADMIN_EMAIL=medzarka@live.fe
 OVERLEAF_DISABLE_SIGNUPS=true
 ALLOW_MONGO_ADMIN_CHECK_FAILURES=true
+
+# Email Configuration
+OVERLEAF_EMAIL_FROM_ADDRESS=medzarka@gmail.com
+OVERLEAF_EMAIL_REPLY_TO=medzarka@gmail.com
+OVERLEAF_EMAIL_SMTP_HOST=smtp.gmail.com
+OVERLEAF_EMAIL_SMTP_PORT=587
+OVERLEAF_EMAIL_SMTP_SECURE=false
+OVERLEAF_EMAIL_SMTP_USER=medzarka@gmail.com
+OVERLEAF_EMAIL_SMTP_PASS=your-app-password
+OVERLEAF_EMAIL_SMTP_TLS_REJECT_UNAUTH=false
+OVERLEAF_EMAIL_SMTP_IGNORE_TLS=false
 
 # OAuth2 Proxy Configuration
 OAUTH2_PROXY_PROVIDER=google
@@ -55,6 +66,9 @@ OAUTH2_PROXY_COOKIE_DOMAINS=.bluewave.work
 OAUTH2_PROXY_WHITELIST_DOMAINS=overleaf.bluewave.work
 OAUTH2_PROXY_REVERSE_PROXY=true
 OAUTH2_PROXY_BANNER=Overleaf LaTeX Editor
+OAUTH2_PROXY_TITLE=Overleaf
+OAUTH2_PROXY_FOOTER=Overleaf Server with OAuth Protection
+OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO=https://www.digitale-lehre.hu-berlin.de/de/lehr-und-lernlandschaft/bilder/overleaf.png/@@images/image-400-7149624da6166c76902b4fc5c11b0dd0.png
 EOF
 
 # --- Create Allowed Emails File ---
