@@ -14,6 +14,7 @@ set -Eeuo pipefail
 # ── Basic Container Info
 CONTAINER_NAME="vscode-server"
 CONTAINER_DESCRIPTION="VS Code Server with OAuth Protection"
+CONTAINER_LOGO="https://code.visualstudio.com/assets/images/code-stable.png"
 IMAGE_NAME="localhost/code-server:latest"
 IMAGE_NEEDS_BUILD=true                  # Build custom image with dev tools
 POD_MODE=true                           # Deploy as pod with OAuth proxy
@@ -63,7 +64,7 @@ ENV_VARS_REQUIRED=(
 
 # ── Optional Environment Variables (with defaults)
 ENV_VARS_OPTIONAL=(
-    "TZ:Europe/Paris"                    # Timezone
+    "TZ:Africa/Tunis"                    # Timezone
     "SUDO_PASSWORD:vscode123"           # Password for sudo in VS Code terminal
 )
 
@@ -72,9 +73,8 @@ USE_OAUTH_PROXY=true
 OAUTH_EXTERNAL_PORT="4180"              # External OAuth proxy port
 OAUTH_INTERNAL_PORT="4180"              # Internal OAuth proxy port  
 OAUTH_UPSTREAM_PORT="8443"              # VS Code Server port
-OAUTH_BRANDING_TITLE="VS Code Server"   # Title shown on login page
-OAUTH_BRANDING_FOOTER="ZAP-VPS Development Environment"  # Footer text
 OAUTH_ALLOWED_EMAILS_FILE="allowed_emails.txt"          # Allowed emails file
+
 
 # ── OAuth Resource Limits (lightweight proxy)
 OAUTH_MEMORY_LIMIT="128m"               # 128MB for OAuth proxy

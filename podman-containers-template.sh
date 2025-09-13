@@ -41,7 +41,7 @@ MONGODB_URL=""
 validate_configuration() {
     local required_vars=(
         "CONTAINER_NAME" "CONTAINER_DESCRIPTION" "IMAGE_NAME" "IMAGE_NEEDS_BUILD"
-        "MEMORY_LIMIT" "CPU_QUOTA" "CPU_SHARES" "BLKIO_WEIGHT"
+        "MEMORY_LIMIT" "CPU_QUOTA" "CPU_SHARES" "BLKIO_WEIGHT" "CONTAINER_LOGO"
         "ENABLE_REDIS" "ENABLE_POSTGRESQL" "ENABLE_MONGODB" "USE_OAUTH_PROXY"
         "HEALTH_CHECK_ENABLED" "IMAGE_PARAMETERS"
     )
@@ -703,9 +703,10 @@ deploy_oauth_proxy() {
         oauth_cmd+=("--pod" "$POD_NAME")
     else
         oauth_cmd+=("--publish" "${OAUTH_EXTERNAL_PORT:-8080}:${OAUTH_INTERNAL_PORT:-8080}")
-        if [[ -n "${NETWORK_NAME:-}" ]]; then
-            oauth_cmd+=("--network" "$NETWORK_NAME")
-        fi
+    fi
+
+    if [[ -n "${NETWORK_NAME:-}" ]]; then
+        oauth_cmd+=("--network" "$NETWORK_NAME")
     fi
     
     # Add resource limits
@@ -732,8 +733,9 @@ deploy_oauth_proxy() {
         "--env" "OAUTH2_PROXY_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}"
         "--env" "OAUTH2_PROXY_COOKIE_SECRET=${OAUTH_COOKIE_SECRET}"
         "--env" "OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt"
-        "--env" "OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO="
-        "--env" "OAUTH2_PROXY_FOOTER=${OAUTH_BRANDING_FOOTER:-Powered by ZAP-VPS Homelab}"
+        "--env" "OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO=${CONTAINER_LOGO}"
+        "--env" "OAUTH2_PROXY_TITLE=${CONTAINER_NAME}"
+        "--env" "OAUTH2_PROXY_FOOTER=${CONTAINER_DESCRIPTION}"
     )
     
     # Add OAuth image
