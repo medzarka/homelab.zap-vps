@@ -412,34 +412,38 @@ setup_pod() {
     systemctl --user stop "pod-${POD_NAME}.service" 2>/dev/null || true
     podman pod exists "$POD_NAME" && podman pod rm -f "$POD_NAME"
     
-    # Build port mapping arguments
+    # Build port mapping arguments - UPDATED LOGIC
     local port_args=()
-    for port in "${PUBLISHED_PORTS[@]}"; do
-        port_args+=("--publish" "$port")
-    done
     
-    # Add service ports
-    $ENABLE_REDIS && port_args+=("--publish" "6379:6379")
-    $ENABLE_POSTGRESQL && port_args+=("--publish" "5432:5432")
-    $ENABLE_MONGODB && port_args+=("--publish" "27017:27017")
-    
-    # Add extra container ports
-    for container_spec in "${EXTRA_CONTAINERS[@]}"; do
-        if [[ -n "$container_spec" ]]; then
-            IFS=':' read -r name image tag port memory cpu envs volumes health <<< "$container_spec"
-            if [[ "$port" != "0" ]]; then
-                port_args+=("--publish" "${port}:${port}")
-            fi
-        fi
-    done
-    
-    # Add OAuth port if enabled
-    if $USE_OAUTH_PROXY; then
-        port_args+=("--publish" "${OAUTH_EXTERNAL_PORT:-8080}:${OAUTH_INTERNAL_PORT:-8080}")
-    fi
-
+    # Add network if specified
     if [[ -n "${NETWORK_NAME:-}" ]]; then
         port_args+=("--network" "$NETWORK_NAME")
+    fi
+    
+    # Conditional port publishing based on OAuth usage
+    if $USE_OAUTH_PROXY; then
+        # Only publish OAuth port when OAuth is enabled
+        port_args+=("--publish" "${OAUTH_EXTERNAL_PORT:-8080}:${OAUTH_INTERNAL_PORT:-8080}")
+    else
+        # Only publish main application ports when OAuth is disabled
+        for port in "${PUBLISHED_PORTS[@]}"; do
+            port_args+=("--publish" "$port")
+        done
+        
+        # Add service ports
+        $ENABLE_REDIS && port_args+=("--publish" "6379:6379")
+        $ENABLE_POSTGRESQL && port_args+=("--publish" "5432:5432")
+        $ENABLE_MONGODB && port_args+=("--publish" "27017:27017")
+        
+        # Add extra container ports
+        for container_spec in "${EXTRA_CONTAINERS[@]}"; do
+            if [[ -n "$container_spec" ]]; then
+                IFS=':' read -r name image tag port memory cpu envs volumes health <<< "$container_spec"
+                if [[ "$port" != "0" ]]; then
+                    port_args+=("--publish" "${port}:${port}")
+                fi
+            fi
+        done
     fi
     
     # Create new pod
@@ -449,6 +453,7 @@ setup_pod() {
     
     okay "Pod ready: ${POD_NAME}"
 }
+
 
 # ── Deploy Service Containers
 deploy_service_containers() {
@@ -461,7 +466,7 @@ deploy_service_containers() {
         podman run -d \
             --name "${CONTAINER_NAME}-redis" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 6379:6379"; fi) \
-            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
+            $(if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${REDIS_MEMORY:-64m}" \
             --cpu-period 100000 \
@@ -486,7 +491,7 @@ deploy_service_containers() {
         podman run -d \
             --name "${CONTAINER_NAME}-postgres" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 5432:5432"; fi) \
-            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
+            $(if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${POSTGRESQL_MEMORY:-256m}" \
             --cpu-period 100000 \
@@ -514,7 +519,7 @@ deploy_service_containers() {
         podman run -d \
             --name "${CONTAINER_NAME}-mongodb" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 27017:27017"; fi) \
-            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
+            $(if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${MONGODB_MEMORY:-512m}" \
             --cpu-period 100000 \
@@ -556,9 +561,7 @@ deploy_service_containers() {
                 cmd+=("--publish" "${port}:${port}")
             fi
 
-            if [[ -n "${NETWORK_NAME:-}" ]]; then
-                cmd+=("--network" "$NETWORK_NAME")
-            fi
+            if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then cmd+=("--network" "$NETWORK_NAME"); fi
             
             # Add volumes
             if [[ "$volumes" != "none" ]]; then
@@ -612,18 +615,19 @@ deploy_container() {
         "--env-file" "$ENV_FILE"
     )
     
-    # Add pod or network options
+    # Add pod or network options 
     if ${POD_MODE:-false}; then
+        # In pod mode, only attach to pod (no individual ports or networks)
         cmd+=("--pod" "$POD_NAME")
     else
-        # Add port mappings for non-pod deployment
+        # In standalone mode, publish ports and connect to network
         for port in "${PUBLISHED_PORTS[@]}"; do
             cmd+=("--publish" "$port")
         done
-    fi
-
-    if [[ -n "${NETWORK_NAME:-}" ]]; then
-        cmd+=("--network" "$NETWORK_NAME")
+        
+        if [[ -n "${NETWORK_NAME:-}" ]]; then
+            cmd+=("--network" "$NETWORK_NAME")
+        fi
     fi
     
     # Add resource limits
@@ -698,15 +702,17 @@ deploy_oauth_proxy() {
         "--restart" "unless-stopped"
     )
     
-    # Add pod or network options
+    # Add pod or network options - UPDATED LOGIC
     if ${POD_MODE:-false}; then
+        # In pod mode, only attach to pod
         oauth_cmd+=("--pod" "$POD_NAME")
     else
+        # In standalone mode, publish port and connect to network
         oauth_cmd+=("--publish" "${OAUTH_EXTERNAL_PORT:-8080}:${OAUTH_INTERNAL_PORT:-8080}")
-    fi
-
-    if [[ -n "${NETWORK_NAME:-}" ]]; then
-        oauth_cmd+=("--network" "$NETWORK_NAME")
+        
+        if [[ -n "${NETWORK_NAME:-}" ]]; then
+            oauth_cmd+=("--network" "$NETWORK_NAME")
+        fi
     fi
     
     # Add resource limits
