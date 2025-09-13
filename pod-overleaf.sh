@@ -1,308 +1,134 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #────────────────────────────────────────────────────────────
-#  📝 OVERLEAF POD WITH OAUTH PROXY
+#  📝 SIMPLE OVERLEAF POD DEPLOYMENT
 #────────────────────────────────────────────────────────────
-# Author : Mohamed Zarka  
-# Version: 2025-09-13
-# Repo   : HOMELAB :: ZAP-VPS
-#────────────────────────────────────────────────────────────
-set -Eeuo pipefail
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📦 OVERLEAF POD CONFIGURATION
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ── Basic Container Info
-CONTAINER_NAME="overleaf"
-CONTAINER_DESCRIPTION="Overleaf Collaborative LaTeX Editor with OAuth Protection"
-CONTAINER_LOGO="https://images.ctfassets.net/nrgyaltdicpt/4hsPQm87zxC3pU76w964Vg/d4775f5d9cdbbf4b1c3c45a361949b24/overleaf-logo-mono.png"
-IMAGE_NAME="sharelatex/sharelatex:latest"
-IMAGE_NEEDS_BUILD=false                 # Use official Overleaf image
-POD_MODE=true                           # Deploy as pod with OAuth proxy
-POD_NAME="pod-overleaf"
+set -e
 
+echo "🚀 Starting Overleaf deployment..."
 
-# ── Network & Ports (Overleaf and OAuth proxy)
-PUBLISHED_PORTS=(
-    "8080:80"                           # Overleaf HTTP port
-)
-NETWORK_NAME="podman-network"           # Custom network for services
+# Create directories
+mkdir -p ~/podman_data/overleaf/{mongodb-data,redis-data,overleaf-data}
 
+# Create environment file
+cat > ~/podman_data/overleaf/.env << 'EOF'
+TZ=Africa/Tunis
+OVERLEAF_APP_NAME=Overleaf
+OVERLEAF_SITE_URL=https://overleaf.example.com
+OVERLEAF_ADMIN_EMAIL=medzarka@live.fr
+ENABLE_CONVERSIONS=true
+EMAIL_CONFIRMATION_DISABLED=true
+OVERLEAF_DISABLE_SIGNUPS=true
+ALLOW_MONGO_ADMIN_CHECK_FAILURES=true
+OVERLEAF_MONGO_URL=mongodb://localhost:27017/overleaf
+REDIS_URL=redis://localhost:6379
+OVERLEAF_REDIS_HOST=localhost
+OVERLEAF_REDIS_PORT=6379
+OAUTH2_PROXY_PROVIDER=google
+OAUTH2_PROXY_CLIENT_ID=your-google-client-id
+OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret
+OAUTH2_PROXY_COOKIE_SECRET=your-32-byte-random-string
+OAUTH2_PROXY_UPSTREAMS=http://localhost:80
+OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4185
+OAUTH2_PROXY_REDIRECT_URL=https://overleaf.example.com/oauth2/callback
+OAUTH2_PROXY_EMAIL_DOMAINS=*
+OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt
+EOF
 
-# ── Custom Image Parameters 
-IMAGE_PARAMETERS=" "                     # Use default entrypoint
+# Create allowed emails file
+echo "admin@example.com" > ~/podman_data/overleaf/allowed_emails.txt
 
+# Clean up any existing deployment
+echo "🧹 Cleaning up existing deployment..."
+systemctl --user stop pod-overleaf.service 2>/dev/null || true
+podman pod rm -f overleaf-pod 2>/dev/null || true
 
-# ── Resource Limits (LaTeX compilation needs generous resources)
-MEMORY_LIMIT="2048m"                    # 2GB RAM for LaTeX compilation
-MEMORY_SWAP="3072m"                     # Allow 3GB swap for heavy documents
-CPU_QUOTA="150000"                      # 1.5 CPU cores (150% of one core)
-CPU_SHARES="2048"                       # High CPU priority for compilation
-BLKIO_WEIGHT="750"                      # High I/O priority for file operations
+# Create pod
+echo "📦 Creating Overleaf pod..."
+podman pod create \
+    --name overleaf-pod \
+    --publish 4185:4185 \
+    --network podman-network
 
+# Deploy MongoDB (passwordless)
+echo "🗄️ Deploying MongoDB..."
+podman run -d \
+    --name overleaf-mongodb \
+    --pod overleaf-pod \
+    --restart unless-stopped \
+    --memory 512m \
+    --volume ~/podman_data/overleaf/mongodb-data:/data/db:Z \
+    mongo:6.0 --bind_ip_all --noauth
 
-# ── Volume Directories (data storage)
-VOLUME_DIRS=(
-    "data:/var/lib/overleaf:Z"          # Overleaf data and compiled documents
-)
+# Deploy Redis (passwordless)
+echo "🔴 Deploying Redis..."
+podman run -d \
+    --name overleaf-redis \
+    --pod overleaf-pod \
+    --restart unless-stopped \
+    --memory 128m \
+    --volume ~/podman_data/overleaf/redis-data:/data:Z \
+    redis:alpine redis-server --save 60 1 --loglevel warning
 
+# Deploy OAuth2 Proxy
+echo "🔐 Deploying OAuth2 Proxy..."
+podman run -d \
+    --name overleaf-oauth \
+    --pod overleaf-pod \
+    --restart unless-stopped \
+    --memory 256m \
+    --env-file ~/podman_data/overleaf/.env \
+    --volume ~/podman_data/overleaf/allowed_emails.txt:/etc/oauth2_proxy/emails.txt:ro,Z \
+    quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🗄️ DATABASE & CACHE SERVICES (REQUIRED FOR OVERLEAF)
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ENABLE_REDIS=true                       # Required for Overleaf sessions
-ENABLE_POSTGRESQL=false                 # Overleaf uses MongoDB
-ENABLE_MONGODB=true                     # Required for Overleaf document storage
+# Deploy Overleaf
+echo "📝 Deploying Overleaf..."
+podman run -d \
+    --name overleaf \
+    --pod overleaf-pod \
+    --restart unless-stopped \
+    --memory 2048m \
+    --env-file ~/podman_data/overleaf/.env \
+    --volume ~/podman_data/overleaf/overleaf-data:/var/lib/overleaf:Z \
+    sharelatex/sharelatex:latest
 
-# ── Redis Configuration
-REDIS_MEMORY="128m"
-REDIS_CPU_QUOTA="25000"
+# Wait for services to start
+echo "⏳ Waiting for services to start..."
+sleep 10
 
-# ── MongoDB Configuration  
-MONGODB_MEMORY="512m"
-MONGODB_CPU_QUOTA="50000"
-MONGODB_DB="overleaf"
-MONGODB_USER="overleaf"
+# Generate systemd service
+echo "⚙️ Creating systemd service..."
+mkdir -p ~/.config/systemd/user
+podman generate systemd --new --name overleaf-pod --files
+mv pod-overleaf-pod.service ~/.config/systemd/user/pod-overleaf.service
+mv container-*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable pod-overleaf.service
 
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🔧 CUSTOM ADDITIONAL SERVICES (NONE BY DEFAULT)
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EXTRA_CONTAINERS=()                     # No additional containers by default
-
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🔐 ENVIRONMENT & AUTHENTICATION
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ── Environment Variables that need user input
-ENV_VARS_REQUIRED=(
-    "OVERLEAF_SITE_URL:Enter the public URL of your Overleaf instance (e.g., https://overleaf.example.com)"
-    "OVERLEAF_ADMIN_EMAIL:Enter the email address for the first admin user"
-)
-
-
-# ── Optional Environment Variables (with Overleaf-specific defaults)
-ENV_VARS_OPTIONAL=(
-    "TZ:Europe/Paris"                                           # Timezone
-    "OVERLEAF_APP_NAME:Overleaf LaTeX Editor"                  # Application name
-    "ENABLED_LINKED_FILE_TYPES:project_file,project_output_file" # File types
-    "ENABLE_CONVERSIONS:true"                                   # Enable file conversions
-    "EMAIL_CONFIRMATION_DISABLED:true"                         # Disable email confirmation
-    "OVERLEAF_DISABLE_SIGNUPS:true"    
-    "ALLOW_MONGO_ADMIN_CHECK_FAILURES:true"                       # Admin-only user creation
-)
-
-
-# ── Google OAuth2 Proxy (ENABLED for secure access)
-USE_OAUTH_PROXY=true
-OAUTH_EXTERNAL_PORT="4185"              # External OAuth proxy port
-OAUTH_INTERNAL_PORT="4185"              # Internal OAuth proxy port  
-OAUTH_UPSTREAM_PORT="80"                # Overleaf HTTP port
-OAUTH_ALLOWED_EMAILS_FILE="allowed_emails.txt"          # Allowed emails file
-
-
-# ── OAuth Resource Limits (lightweight proxy)
-OAUTH_MEMORY_LIMIT="256m"               # 256MB for OAuth proxy
-OAUTH_MEMORY_SWAP="512m"                # 512MB swap for OAuth proxy
-OAUTH_CPU_QUOTA="25000"                 # 0.25 CPU cores for OAuth
-OAUTH_CPU_SHARES="512"                  # Lower CPU priority than Overleaf
-OAUTH_BLKIO_WEIGHT="250"                # Lower I/O priority than Overleaf
-
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  ⚙️ CONTAINER OPTIONS & HEALTH CHECKS
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ── Container Options
-EXTRA_OPTIONS=(
-    "--security-opt=label=disable"      # Disable SELinux labeling
-    "--restart=unless-stopped"          # Auto-restart unless manually stopped
-    "--label=homepage.group=Production" # Homepage integration labels
-    "--label=homepage.name=Overleaf"
-    "--label=homepage.icon=overleaf"
-    "--label=homepage.description=Collaborative LaTeX Editor"
-)
-
-
-# ── Health Check (HTTP check for Overleaf availability)
-HEALTH_CHECK_ENABLED=true
-HEALTH_CHECK_CMD="curl -f http://localhost:80/healthz || exit 1"  # Check Overleaf health endpoint
-HEALTH_CHECK_INTERVAL="60s"             # Check every minute
-HEALTH_CHECK_TIMEOUT="15s"              # 15 second timeout
-HEALTH_CHECK_RETRIES=3                  # Retry 3 times before marking unhealthy
-
-
-# ── No custom image needed (using official Overleaf image)
-CONTAINERFILE_CONTENT=''
-
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📝 OVERLEAF-SPECIFIC MONGODB INITIALIZATION
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-# ── Override setup_service_env_vars for passwordless setup
-setup_service_env_vars() {
-    info "Setting up Overleaf service credentials (passwordless)..."
-    
-    # Passwordless Redis configuration
-    if $ENABLE_REDIS; then
-        grep -q "^OVERLEAF_REDIS_HOST=" "$ENV_FILE" || echo "OVERLEAF_REDIS_HOST=localhost" >> "$ENV_FILE"
-        grep -q "^OVERLEAF_REDIS_PORT=" "$ENV_FILE" || echo "OVERLEAF_REDIS_PORT=6379" >> "$ENV_FILE"
-        REDIS_URL="redis://localhost:6379"
-        grep -q "^REDIS_URL=" "$ENV_FILE" || echo "REDIS_URL=${REDIS_URL}" >> "$ENV_FILE"
-    fi
-    
-    # Passwordless MongoDB configuration for Overleaf
-    if $ENABLE_MONGODB; then
-        # Simple MongoDB URL without authentication
-        OVERLEAF_MONGO_URL="mongodb://localhost:27017/${MONGODB_DB:-overleaf}"
-        grep -q "^OVERLEAF_MONGO_URL=" "$ENV_FILE" || echo "OVERLEAF_MONGO_URL=${OVERLEAF_MONGO_URL}" >> "$ENV_FILE"
-        
-        # Generic MongoDB URL for template compatibility
-        MONGODB_URL="$OVERLEAF_MONGO_URL"
-        grep -q "^MONGODB_URL=" "$ENV_FILE" || echo "MONGODB_URL=${MONGODB_URL}" >> "$ENV_FILE"
-    fi
-}
-
-# ── Initialize MongoDB Replica Set for Overleaf
-initialize_mongo_replica_set() {
-    info "Initializing MongoDB replica set for Overleaf..."
-    
-    # Wait for MongoDB to be ready
-    local max_attempts=30
-    local attempt=1
-    
-    while [ $attempt -le $max_attempts ]; do
-        if podman exec "${CONTAINER_NAME}-mongodb" mongosh --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
-            break
-        fi
-        info "Waiting for MongoDB to be ready... (attempt $attempt/$max_attempts)"
-        sleep 2
-        ((attempt++))
-    done
-    
-    if [ $attempt -gt $max_attempts ]; then
-        error "MongoDB failed to start within expected time"
-    fi
-    
-    # Initialize replica set
-    podman exec "${CONTAINER_NAME}-mongodb" mongosh --eval "
-    try {
-        rs.status();
-        print('✅ Replica set already exists');
-    } catch (e) {
-        print('🔧 Initializing replica set for Overleaf...');
-        rs.initiate({ 
-            _id: 'overleaf', 
-            members: [{ _id: 0, host: '127.0.0.1:27017' }] 
-        });
-        print('✅ Replica set initialized successfully');
-    }
-    " 2>/dev/null || warn "Replica set initialization may have failed"
-    
-    okay "MongoDB replica set ready for Overleaf"
-}
-
-# ── Create MongoDB replica set initialization for Overleaf
-create_mongo_replica_set_script() {
-    local mongo_init_dir="${DATA_ROOT}/mongodb-init"
-    mkdir -p "$mongo_init_dir"
-    
-    # MongoDB replica set initialization script
-    cat > "${mongo_init_dir}/mongo-init.js" <<'EOC'
-try {
-  rs.status();
-  console.log("Replica set already exists, skipping initialization.");
-} catch (e) {
-  console.log("Initializing new replica set for Overleaf...");
-  rs.initiate({ 
-    _id: "overleaf", 
-    members: [{ _id: 0, host: "127.0.0.1:27017" }] 
-  });
-}
-EOC
-
-    # MongoDB health check script
-    cat > "${mongo_init_dir}/healthcheck.js" <<'EOC'
-const result = db.adminCommand({ ping: 1 });
-if (result.ok === 1) {
-  quit(0); // Success
-} else {
-  quit(1); // Failure  
-}
-EOC
-
-    chown -R "${MGRSYS_UID}:${MGRSYS_GID}" "$mongo_init_dir"
-    info "MongoDB replica set scripts created"
-}
-
-# ── Override deploy_service_containers for passwordless setup
-deploy_service_containers() {
-    # Deploy passwordless Redis
-    if $ENABLE_REDIS; then
-        info "Deploying passwordless Redis for Overleaf..."
-        systemctl --user stop "container-${CONTAINER_NAME}-redis.service" 2>/dev/null || true
-        podman rm -f "${CONTAINER_NAME}-redis" 2>/dev/null || true
-
-        podman run -d \
-            --name "${CONTAINER_NAME}-redis" \
-            $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 6379:6379"; fi) \
-            $(if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then echo "--network" "$NETWORK_NAME"; fi) \
-            --restart unless-stopped \
-            --memory "${REDIS_MEMORY:-128m}" \
-            --cpu-period 100000 \
-            --cpu-quota "${REDIS_CPU_QUOTA:-25000}" \
-            --volume "${DATA_ROOT}/redis-data:/data:Z" \
-            --health-cmd "redis-cli ping" \
-            --health-interval 30s \
-            --health-timeout 10s \
-            --health-retries 3 \
-            redis:alpine redis-server --save 60 1 --loglevel warning
-        
-        okay "Passwordless Redis deployed for Overleaf"
-    fi
-    
-    # Deploy passwordless MongoDB
-    if $ENABLE_MONGODB; then
-        info "Deploying passwordless MongoDB for Overleaf..."
-        systemctl --user stop "container-${CONTAINER_NAME}-mongodb.service" 2>/dev/null || true
-        podman rm -f "${CONTAINER_NAME}-mongodb" 2>/dev/null || true
-        
-        podman run -d \
-            --name "${CONTAINER_NAME}-mongodb" \
-            $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 27017:27017"; fi) \
-            $(if [[ ${POD_MODE:-false} == false && -n "${NETWORK_NAME:-}" ]]; then echo "--network" "$NETWORK_NAME"; fi) \
-            --restart unless-stopped \
-            --memory "${MONGODB_MEMORY:-512m}" \
-            --cpu-period 100000 \
-            --cpu-quota "${MONGODB_CPU_QUOTA:-50000}" \
-            --volume "${DATA_ROOT}/mongodb-data:/data/db:Z" \
-            --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'" \
-            --health-interval 30s \
-            --health-timeout 10s \
-            --health-retries 3 \
-            mongo:6.0 --bind_ip_all
-        
-        okay "Passwordless MongoDB deployed for Overleaf"
-    fi
-}
-
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🚀 EXECUTE DEPLOYMENT
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Get script directory to find template
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE_SCRIPT="${SCRIPT_DIR}/podman-containers-template.sh"
-
-
-# Source the template and execute deployment
-if [[ -f "$TEMPLATE_SCRIPT" ]]; then
-    source "$TEMPLATE_SCRIPT"
-    deploy_container_stack
-else
-    echo "❌ Template script not found: $TEMPLATE_SCRIPT"
-    echo "💡 Make sure 'podman-containers-template.sh' is in the same directory"
-    echo "📁 Current directory: $SCRIPT_DIR"
-    echo "📋 Available files:"
-    ls -la "$SCRIPT_DIR"
-    exit 1
-fi
+echo ""
+echo "🎉 Overleaf deployment completed!"
+echo ""
+echo "📋 Next Steps:"
+echo "1. Edit ~/podman_data/overleaf/.env and add your Google OAuth credentials:"
+echo "   - OAUTH2_PROXY_CLIENT_ID=your-google-client-id"
+echo "   - OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret"
+echo "   - OAUTH2_PROXY_COOKIE_SECRET=your-32-byte-random-string"
+echo ""
+echo "2. Add allowed email addresses to:"
+echo "   ~/podman_data/overleaf/allowed_emails.txt"
+echo ""
+echo "3. Restart the service:"
+echo "   systemctl --user restart pod-overleaf.service"
+echo ""
+echo "4. Create your first admin user:"
+echo "   podman exec -it overleaf /bin/bash -c \\"
+echo "   \"cd /overleaf/services/web && node modules/server-ce-scripts/scripts/create-user \\"
+echo "   --admin --email='admin@example.com' --password='YourPassword123'\""
+echo ""
+echo "5. Access Overleaf at: http://your-server:4185"
+echo ""
+echo "🔧 Management Commands:"
+echo "  Start:  systemctl --user start pod-overleaf.service"
+echo "  Stop:   systemctl --user stop pod-overleaf.service"
+echo "  Status: systemctl --user status pod-overleaf.service"
+echo "  Logs:   podman logs -f overleaf"
