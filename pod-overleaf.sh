@@ -1,138 +1,162 @@
 #!/bin/bash
-#────────────────────────────────────────────────────────────
-#  📝 SIMPLE OVERLEAF POD DEPLOYMENT
-#────────────────────────────────────────────────────────────
-
-set -e
-
-echo "🚀 Starting Overleaf deployment..."
-
-# Create directories
-mkdir -p ~/podman_data/overleaf/{mongodb-data,redis-data,overleaf-data}
-
-# Generate a valid cookie secret
-COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n=')
+#set -e
 
 
-# Create environment file
-cat > ~/podman_data/overleaf/.env << 'EOF'
-TZ=Africa/Tunis
-OVERLEAF_APP_NAME=Overleaf
-OVERLEAF_SITE_URL=https://overleaf.example.com
-OVERLEAF_ADMIN_EMAIL=medzarka@live.fr
-ENABLE_CONVERSIONS=true
-EMAIL_CONFIRMATION_DISABLED=true
-OVERLEAF_DISABLE_SIGNUPS=true
-ALLOW_MONGO_ADMIN_CHECK_FAILURES=true
-OVERLEAF_MONGO_URL=mongodb://localhost:27017/overleaf
-REDIS_URL=redis://localhost:6379
-OVERLEAF_REDIS_HOST=localhost
-OVERLEAF_REDIS_PORT=6379
-OAUTH2_PROXY_PROVIDER=google
-OAUTH2_PROXY_CLIENT_ID=your-google-client-id
-OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret
-OAUTH2_PROXY_COOKIE_SECRET=$COOKIE_SECRET
-OAUTH2_PROXY_UPSTREAMS=http://localhost:80
-OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4185
-OAUTH2_PROXY_REDIRECT_URL=https://overleaf.example.com/oauth2/callback
-OAUTH2_PROXY_EMAIL_DOMAINS=*
-OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt
+# --- Configuration ---
+ENV_FILE="${PODMAN_DATA_DIR}/.env"
+POD_NAME="overleaf-pod"
+PODMAN_DATA_DIR="${HOME}/podman_data"
+POD_DIR="${PODMAN_DATA_DIR}/overleaf-pod"
+
+POD_OVERLEAF_DIR="${POD_DIR}/overleaf"
+POD_REDIS_DIR="${POD_DIR}/redis"
+POD_MONGO_DIR="${POD_DIR}/mongo"
+
+CONTAINER_OVERLEAF_NAME="overleaf-app"
+CONTAINER_REDIS_NAME="redis-overleaf"
+CONTAINER_MONGO_NAME="mongo-overleaf"
+
+mkdir -p ${POD_MONGO_DIR}/db
+mkdir -p ${POD_MONGO_DIR}/configdb
+mkdir -p ${POD_MONGO_DIR}/init
+mkdir -p ${POD_REDIS_DIR}/data
+mkdir -p ${POD_OVERLEAF_DIR}/data
+
+# --- Mongo Init Script ---
+cat > "${POD_MONGO_DIR}/init/mongo-init.js" << EOF
+try {
+  rs.status();
+  console.log("Replica set already exists, skipping initialization.");
+} catch (e) {
+  console.log("Initializing new replica set...");
+  rs.initiate({ _id: "overleaf", members: [{ _id: 0, host: "127.0.0.1:27017" }] });
+}
 EOF
 
-# Create allowed emails file
-echo "admin@example.com" > ~/podman_data/overleaf/allowed_emails.txt
+# ---> Create the healthcheck.js file <---
+cat > "${POD_MONGO_DIR}/init/healthcheck.js" <<EOF
+const result = db.adminCommand({ ping: 1 });
+if (result.ok === 1) {
+  // Exit with 0 for success
+  quit(0);
+} else {
+  // Exit with 1 for failure
+  quit(1);
+}
+EOF
 
-# Clean up any existing deployment
-echo "🧹 Cleaning up existing deployment..."
-systemctl --user stop pod-overleaf.service 2>/dev/null || true
-podman pod rm -f overleaf-pod 2>/dev/null || true
+# --- Deploy ---
+echo "Stopping and removing existing pod..."
+systemctl --user stop pod-overleaf-pod.service
+podman pod stop "${POD_NAME}" || true
+podman pod rm "${POD_NAME}" || true
 
-# Create pod
-echo "📦 Creating Overleaf pod..."
-podman pod create \
-    --name overleaf-pod \
-    --publish 4185:4185 \
-    --network podman-network
+echo "Creating new pod: ${POD_NAME}"
+podman pod create --name "${POD_NAME}" -p "8080:80"
 
-# Deploy MongoDB (passwordless)
-echo "🗄️ Deploying MongoDB..."
-podman run -d \
-    --name overleaf-mongodb \
-    --pod overleaf-pod \
-    --restart unless-stopped \
-    --memory 512m \
-    --volume ~/podman_data/overleaf/mongodb-data:/data/db:Z \
-    mongo:6.0 --bind_ip_all --noauth
+echo "Starting MongoDB container..."
+podman run -d --pod "${POD_NAME}" --name "${CONTAINER_MONGO_NAME}" \
+  --restart=always \
+  --memory=128m \
+  --cpu-shares=256 \
+  --volume="${POD_MONGO_DIR}/db:/data/db:Z" \
+  --volume="${POD_MONGO_DIR}/configdb:/data/configdb:Z" \
+  --volume="${POD_MONGO_DIR}/init/mongo-init.js:/docker-entrypoint-initdb.d/init.js:Z" \
+  --volume="${POD_MONGO_DIR}/init/healthcheck.js:/healthcheck.js:ro,Z" \
+  --env MONGO_INITDB_DATABASE=overleaf \
+  --health-cmd='["CMD-SHELL", "mongosh --norc --quiet --file /healthcheck.js"]' \
+  --health-interval=30s \
+  --health-start-period=10s \
+  mongo:6.0 --replSet overleaf
 
-# Deploy Redis (passwordless)
-echo "🔴 Deploying Redis..."
-podman run -d \
-    --name overleaf-redis \
-    --pod overleaf-pod \
-    --restart unless-stopped \
-    --memory 128m \
-    --volume ~/podman_data/overleaf/redis-data:/data:Z \
-    redis:alpine redis-server --save 60 1 --loglevel warning
+echo "Starting Redis container..."
+podman run -d --pod "${POD_NAME}" --name "${CONTAINER_REDIS_NAME}" \
+  --restart=always \
+  --memory=128m \
+  --cpu-shares=256 \
+  --health-cmd='["CMD-SHELL", "redis-cli ping | grep PONG"]' \
+  --health-interval=30s \
+  --health-start-period=10s \
+  --volume="${POD_REDIS_DIR}/data:/data:Z" \
+  docker.io/library/redis:8-alpine redis-server --save 60 1 --loglevel warning
 
-# Deploy OAuth2 Proxy
-echo "🔐 Deploying OAuth2 Proxy..."
-podman run -d \
-    --name overleaf-oauth \
-    --pod overleaf-pod \
-    --restart unless-stopped \
-    --memory 256m \
-    --env-file ~/podman_data/overleaf/.env \
-    --volume ~/podman_data/overleaf/allowed_emails.txt:/etc/oauth2_proxy/emails.txt:ro,Z \
-    quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
+echo "Starting Overleaf container..."
+# Required for Overleaf to write to the volume
+podman run -d --pod "${POD_NAME}" --name "${CONTAINER_OVERLEAF_NAME}" \
+  --restart=unless-stopped \
+  --memory=2048m \
+  --cpu-shares=1024 \
+  --env OVERLEAF_MONGO_URL="mongodb://localhost:27017/overleaf?replicaSet=overleaf" \
+  --env OVERLEAF_REDIS_HOST="localhost" \
+  --env OVERLEAF_APP_NAME="Overleaf" \
+  --env ENABLED_LINKED_FILE_TYPES="project_file,project_output_file" \
+  --env ENABLE_CONVERSIONS="true" \
+  --env EMAIL_CONFIRMATION_DISABLED="true" \
+  --env OVERLEAF_SITE_URL="http://overleaf.bluewave.work" \
+  --env OVERLEAF_ADMIN_EMAIL="medzarka@gmail.com" \
+  --env OVERLEAF_DISABLE_SIGNUPS="true" \
+  --volume="${POD_OVERLEAF_DIR}/data:/var/lib/overleaf:Z" \
+  --label homepage.group="Production" \
+  --label homepage.name="Overleaf" \
+  --label homepage.icon="overleaf" \
+  --label homepage.href="http://overleaf.bluewave.work" \
+  --label homepage.description="Collaborative LaTeX Editor" \
+  --health-cmd='["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]' \
+  --health-interval=1m \
+  --health-start-period=30s \
+  --health-retries=3 \
+  --health-timeout=10s \
+  sharelatex/sharelatex:latest
 
-# Deploy Overleaf
-echo "📝 Deploying Overleaf..."
-podman run -d \
-    --name overleaf \
-    --pod overleaf-pod \
-    --restart unless-stopped \
-    --memory 2048m \
-    --env-file ~/podman_data/overleaf/.env \
-    --volume ~/podman_data/overleaf/overleaf-data:/var/lib/overleaf:Z \
-    sharelatex/sharelatex:latest
+echo "Deployment complete."
 
-# Wait for services to start
-echo "⏳ Waiting for services to start..."
-sleep 10
 
-# Generate systemd service
-echo "⚙️ Creating systemd service..."
-mkdir -p ~/.config/systemd/user
+
+# Since public sign-ups are disabled in the Overleaf container's configuration (`OVERLEAF_DISABLE_SIGNUPS="true"`), new users must be created manually by an administrator. There are two ways to do this.
+#
+#  1. Get a shell inside the container**: 
+#    ```bash
+#    podman exec -it overleaf-app /bin/bash
+#    ```
+#  2. Find the User Creation Script: The location of the administrative script can change with new versions of Overleaf. To ensure the command is always correct, first find the script's exact path. Thus, we can run the `find` command to locate the script: 
+#    ```bash
+#    find / -name "create-user.js". 
+#    ```
+#
+#  As of this writing, it is:
+#
+#    ```bash
+#    /overleaf/services/web/modules/server-ce-scripts/scripts/create-user.js
+#    ``` 
+#
+#  3. Create the User: Run the `node` command using the path you just found. Note that this script only requires the email address:
+#
+#  ```bash
+#  cd /overleaf/services/web && node modules/server-ce-scripts/scripts/create-user --admin --email=medzarka@gmail.com --password='YourStrongPassword'
+#  ```
+#
+#  4. Exit the container: After the command runs successfully, you can leave the container shell: `exit`
+
+
+# To overcome the WARNING Memory overcommit, we run:  
+# ```bash
+# echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/99-redis.conf
+# ```
+# or the following to get immediate effect:
+# ```bash
+# sudo sysctl -w vm.overcommit_memory=1
+#
+
+
+
+# Generate the files for the pod and its containers
 podman generate systemd --new --name overleaf-pod --files
-mv pod-overleaf-pod.service ~/.config/systemd/user/pod-overleaf.service
-mv container-*.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable pod-overleaf.service
+# Move all generated service files
+mv 
+mv pod-${POD_NAME}.service ~/.config/systemd/user/
+mv container-${CONTAINER_MONGO_NAME}.service ~/.config/systemd/user/
+mv container-${CONTAINER_REDIS_NAME}.service ~/.config/systemd/user/
+mv container-${CONTAINER_OVERLEAF_NAME}.service ~/.config/systemd/user/
 
-echo ""
-echo "🎉 Overleaf deployment completed!"
-echo ""
-echo "📋 Next Steps:"
-echo "1. Edit ~/podman_data/overleaf/.env and add your Google OAuth credentials:"
-echo "   - OAUTH2_PROXY_CLIENT_ID=your-google-client-id"
-echo "   - OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret"
-echo "   - OAUTH2_PROXY_COOKIE_SECRET=your-32-byte-random-string"
-echo ""
-echo "2. Add allowed email addresses to:"
-echo "   ~/podman_data/overleaf/allowed_emails.txt"
-echo ""
-echo "3. Restart the service:"
-echo "   systemctl --user restart pod-overleaf.service"
-echo ""
-echo "4. Create your first admin user:"
-echo "   podman exec -it overleaf /bin/bash -c \\"
-echo "   \"cd /overleaf/services/web && node modules/server-ce-scripts/scripts/create-user \\"
-echo "   --admin --email='admin@example.com' --password='YourPassword123'\""
-echo ""
-echo "5. Access Overleaf at: http://your-server:4185"
-echo ""
-echo "🔧 Management Commands:"
-echo "  Start:  systemctl --user start pod-overleaf.service"
-echo "  Stop:   systemctl --user stop pod-overleaf.service"
-echo "  Status: systemctl --user status pod-overleaf.service"
-echo "  Logs:   podman logs -f overleaf"
+systemctl --user daemon-reload
+systemctl --user enable --now pod-overleaf-pod.service
