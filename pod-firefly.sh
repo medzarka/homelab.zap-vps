@@ -1,8 +1,6 @@
 #!/bin/bash
 #────────────────────────────────────────────────────────────
-#  💰 SIMPLE FIREFLY III POD DEPLOYMENT
-#────────────────────────────────────────────────────────────
-# Just works - no complexity, no variables, hardcoded values
+#  💰 SIMPLE FIREFLY III POD DEPLOYMENT - FIXED VERSION
 #────────────────────────────────────────────────────────────
 
 set -e
@@ -13,24 +11,24 @@ echo "🚀 Starting Firefly III deployment..."
 COOKIE_SECRET=$(python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))")
 APP_KEY="base64:$(head -c 32 /dev/urandom | base64)"
 
-# Create directories
+# Create directories with proper permissions
 mkdir -p ~/podman_data/firefly/{data/database,uploads}
-
-# Set proper permissions for Firefly III
-sudo chown -R ${USER}:${USER} ~/podman_data/firefly
-sudo chmod -R 775 ~/podman_data/firefly
 
 # Create SQLite database file
 touch ~/podman_data/firefly/data/database/database.sqlite
 
-# Create environment file with all configurations
+# Set proper permissions (UID 33 = www-data)
+sudo chown -R 33:33 ~/podman_data/firefly
+sudo chmod -R 775 ~/podman_data/firefly
+
+# Create environment file
 cat > ~/podman_data/firefly/.env << EOF
 # Firefly III Configuration
 APP_KEY=$APP_KEY
 SITE_OWNER=admin@bluewave.work
-TZ=Africa/Tunis
+TZ=Europe/Paris
 DEFAULT_LANGUAGE=en_US
-DEFAULT_LOCALE=en_US
+DEFAULT_LOCALE=equal
 
 # Database (SQLite)
 DB_CONNECTION=sqlite
@@ -40,12 +38,16 @@ DB_DATABASE=/var/www/html/storage/database/database.sqlite
 TRUSTED_PROXIES=**
 APP_URL=https://firefly.bluewave.work
 
+# Disable problematic features during initial setup
+DISABLE_FRAME_HEADER=false
+DISABLE_CSP_HEADER=false
+
 # Email Configuration (SMTP)
 MAIL_MAILER=smtp
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_FROM=noreply@bluewave.work
-MAIL_USERNAME=medzarka@gmail.com
+MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 MAIL_ENCRYPTION=tls
 MAIL_FROM_NAME="Firefly III"
@@ -75,7 +77,7 @@ admin@bluewave.work
 your-email@gmail.com
 EOF
 
-# Clean up any existing deployment
+# Clean up existing deployment
 echo "🧹 Cleaning up existing deployment..."
 systemctl --user stop pod-firefly.service 2>/dev/null || true
 podman pod rm -f firefly-pod 2>/dev/null || true
@@ -87,21 +89,22 @@ podman pod create \
     --publish 4182:4182 \
     --network podman-network
 
-# Deploy Firefly III
+# Deploy Firefly III with correct user mapping
 echo "💰 Deploying Firefly III..."
 podman run -d \
     --name firefly-app \
     --pod firefly-pod \
     --restart unless-stopped \
     --memory 1024m \
+    --user 33:33 \
     --env-file ~/podman_data/firefly/.env \
     --volume ~/podman_data/firefly/data:/var/www/html/storage:Z \
     --volume ~/podman_data/firefly/uploads:/var/www/html/storage/upload:Z \
-    --security-opt label=disable \
-    --health-cmd "curl -f http://localhost:8080/health || exit 1" \
-    --health-interval 60s \
+    --health-cmd "curl -f http://localhost:8080/ || exit 1" \
+    --health-interval 120s \
     --health-timeout 10s \
     --health-retries 3 \
+    --health-start-period 60s \
     fireflyiii/core:latest
 
 # Deploy OAuth2 Proxy
@@ -119,9 +122,18 @@ podman run -d \
     --health-retries 3 \
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
 
-# Wait for services to start
-echo "⏳ Waiting for services to start..."
-sleep 15
+# Wait for Firefly III to initialize
+echo "⏳ Waiting for Firefly III to initialize..."
+sleep 60
+
+# Initialize Firefly III
+echo "🔧 Initializing Firefly III..."
+podman exec firefly-app php artisan key:generate --force
+podman exec firefly-app php artisan config:clear
+podman exec firefly-app php artisan cache:clear
+podman exec firefly-app php artisan passport:keys --force
+podman exec firefly-app php artisan migrate --force
+podman exec firefly-app php artisan firefly-iii:upgrade-database
 
 # Generate systemd service
 echo "⚙️ Creating systemd service..."
@@ -136,27 +148,10 @@ echo ""
 echo "🎉 Firefly III deployment completed!"
 echo ""
 echo "📋 Next Steps:"
-echo "1. Edit ~/podman_data/firefly/.env and add your credentials:"
-echo "   - OAUTH2_PROXY_CLIENT_ID=your-google-client-id"
-echo "   - OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret"
-echo "   - MAIL_USERNAME=your-email@gmail.com"
-echo "   - MAIL_PASSWORD=your-app-password"
-echo ""
-echo "2. Add allowed email addresses to:"
-echo "   ~/podman_data/firefly/allowed_emails.txt"
-echo ""
-echo "3. Restart the service:"
-echo "   systemctl --user restart pod-firefly.service"
-echo ""
-echo "4. Access Firefly III at: https://firefly.bluewave.work:4182"
-echo ""
-echo "5. Complete the initial setup wizard in the web interface"
-echo ""
-echo "🔧 Management Commands:"
-echo "  Start:  systemctl --user start pod-firefly.service"
-echo "  Stop:   systemctl --user stop pod-firefly.service"
-echo "  Status: systemctl --user status pod-firefly.service"
-echo "  Logs:   podman logs -f firefly-app"
+echo "1. Edit ~/podman_data/firefly/.env and add your credentials"
+echo "2. Add allowed emails to ~/podman_data/firefly/allowed_emails.txt"
+echo "3. Access Firefly III at: https://firefly.bluewave.work:4182"
+echo "4. Complete the setup wizard and create your first account"
 echo ""
 echo "✨ Generated APP_KEY: $APP_KEY"
 echo "🔐 Generated Cookie Secret: $COOKIE_SECRET"
