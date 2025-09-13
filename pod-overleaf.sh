@@ -42,7 +42,7 @@ ALLOW_MONGO_ADMIN_CHECK_FAILURES=true
 OAUTH2_PROXY_PROVIDER=google
 OAUTH2_PROXY_CLIENT_ID=your-google-client-id-here
 OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret-here
-OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n=')
+OAUTH2_PROXY_COOKIE_SECRET=uhc5eR1KnodE7enrQo6kR5i77xiqLx2BDTQbhxJdwL0
 OAUTH2_PROXY_UPSTREAMS=http://localhost:80
 OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4185
 OAUTH2_PROXY_REDIRECT_URL=https://overleaf.bluewave.work/oauth2/callback
