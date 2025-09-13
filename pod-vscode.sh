@@ -105,22 +105,40 @@ FROM lscr.io/linuxserver/code-server:latest
 
 USER root
 
-# Install development tools and dependencies
+# Install development tools, dependencies, and available fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv \
-        htop git curl wget neofetch \
+        htop git curl wget neofetch unzip \
         build-essential gdb default-jdk \
-        shellcheck pandoc openssh-client \
+        shellcheck openssh-client \
+        pandoc \
         texlive-latex-base texlive-fonts-recommended \
         texlive-latex-extra texlive-lang-arabic \
         lmodern fonts-noto \
-        fonts-firacode fonts-sourcecodepro && \
+        fonts-firacode && \
     echo "abc ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/90-abc-nopasswd && \
     chmod 0440 /etc/sudoers.d/90-abc-nopasswd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Generate SSH key pair for abc user (using /config)
+# Manually install Source Code Pro fonts
+RUN mkdir -p /usr/local/share/fonts/source-code-pro && \
+    curl -L https://github.com/adobe-fonts/source-code-pro/releases/download/2.042R-u%2F1.062R-i%2F1.026R-vf/TTF-source-code-pro-2.042R-u_1.062R-i.zip -o /tmp/source-code-pro.zip && \
+    unzip /tmp/source-code-pro.zip -d /tmp/source-code-pro && \
+    cp /tmp/source-code-pro/*.ttf /usr/local/share/fonts/source-code-pro/ && \
+    rm -rf /tmp/source-code-pro*
+
+# Manually install Fira Mono fonts (if fonts-firamono not available)
+RUN mkdir -p /usr/local/share/fonts/fira-mono && \
+    curl -L https://github.com/mozilla/Fira/archive/4.202.zip -o /tmp/fira.zip && \
+    unzip /tmp/fira.zip -d /tmp/fira && \
+    cp /tmp/fira/Fira-4.202/ttf/FiraMono*.ttf /usr/local/share/fonts/fira-mono/ && \
+    rm -rf /tmp/fira*
+
+# Update font cache
+RUN fc-cache -f -v
+
+# Generate SSH key pair for abc user (using /config as home directory)
 RUN mkdir -p /config/.ssh && \
     if [ ! -f /config/.ssh/id_ed25519 ]; then \
         ssh-keygen -t ed25519 -N "" -f /config/.ssh/id_ed25519; \
@@ -142,6 +160,7 @@ USER abc
 
 USER root
 '
+
 
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  🚀 EXECUTE DEPLOYMENT
