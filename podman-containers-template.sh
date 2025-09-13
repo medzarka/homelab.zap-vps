@@ -455,10 +455,11 @@ deploy_service_containers() {
     if $ENABLE_REDIS; then
         info "Deploying Redis..."
         podman rm -f "${CONTAINER_NAME}-redis" 2>/dev/null || true
-        
+
         podman run -d \
             --name "${CONTAINER_NAME}-redis" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 6379:6379"; fi) \
+            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${REDIS_MEMORY:-64m}" \
             --cpu-period 100000 \
@@ -482,6 +483,7 @@ deploy_service_containers() {
         podman run -d \
             --name "${CONTAINER_NAME}-postgres" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 5432:5432"; fi) \
+            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${POSTGRESQL_MEMORY:-256m}" \
             --cpu-period 100000 \
@@ -508,6 +510,7 @@ deploy_service_containers() {
         podman run -d \
             --name "${CONTAINER_NAME}-mongodb" \
             $(if ${POD_MODE:-false}; then echo "--pod $POD_NAME"; else echo "--publish 27017:27017"; fi) \
+            $(if ${NETWORK_NAME:-};  then echo "--network" "$NETWORK_NAME"; fi) \
             --restart unless-stopped \
             --memory "${MONGODB_MEMORY:-512m}" \
             --cpu-period 100000 \
@@ -546,6 +549,10 @@ deploy_service_containers() {
                 cmd+=("--pod" "$POD_NAME")
             elif [[ "$port" != "0" ]]; then
                 cmd+=("--publish" "${port}:${port}")
+            fi
+
+            if [[ -n "${NETWORK_NAME:-}" ]]; then
+                cmd+=("--network" "$NETWORK_NAME")
             fi
             
             # Add volumes
@@ -607,10 +614,10 @@ deploy_container() {
         for port in "${PUBLISHED_PORTS[@]}"; do
             cmd+=("--publish" "$port")
         done
-        
-        if [[ -n "${NETWORK_NAME:-}" ]]; then
-            cmd+=("--network" "$NETWORK_NAME")
-        fi
+    fi
+
+    if [[ -n "${NETWORK_NAME:-}" ]]; then
+        cmd+=("--network" "$NETWORK_NAME")
     fi
     
     # Add resource limits
