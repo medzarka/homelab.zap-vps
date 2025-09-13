@@ -110,7 +110,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv \
         htop git curl wget neofetch \
         build-essential gdb default-jdk \
-        shellcheck pandoc \
+        shellcheck pandoc openssh-client \
         texlive-latex-base texlive-fonts-recommended \
         texlive-latex-extra texlive-lang-arabic \
         lmodern fonts-noto && \
@@ -118,6 +118,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chmod 0440 /etc/sudoers.d/90-abc-nopasswd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Generate SSH key pair for abc user
+RUN mkdir -p /home/abc/.ssh && \
+    if [ ! -f /home/abc/.ssh/id_rsa ]; then \
+        ssh-keygen -t rsa -b 4096 -N "" -f /home/abc/.ssh/id_rsa; \
+    fi && \
+    chmod 700 /home/abc/.ssh && \
+    chmod 600 /home/abc/.ssh/id_rsa* && \
+    chown -R abc:abc /home/abc
 
 # Create workspace with proper permissions
 RUN mkdir -p /config/workspace && \
