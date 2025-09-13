@@ -10,6 +10,10 @@ echo "🚀 Starting Overleaf deployment..."
 # Create directories
 mkdir -p ~/podman_data/overleaf/{mongodb-data,redis-data,overleaf-data}
 
+# Generate a valid cookie secret
+COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n=')
+
+
 # Create environment file
 cat > ~/podman_data/overleaf/.env << 'EOF'
 TZ=Africa/Tunis
@@ -27,7 +31,7 @@ OVERLEAF_REDIS_PORT=6379
 OAUTH2_PROXY_PROVIDER=google
 OAUTH2_PROXY_CLIENT_ID=your-google-client-id
 OAUTH2_PROXY_CLIENT_SECRET=your-google-client-secret
-OAUTH2_PROXY_COOKIE_SECRET=your-32-byte-random-string
+OAUTH2_PROXY_COOKIE_SECRET=$COOKIE_SECRET
 OAUTH2_PROXY_UPSTREAMS=http://localhost:80
 OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4185
 OAUTH2_PROXY_REDIRECT_URL=https://overleaf.example.com/oauth2/callback
