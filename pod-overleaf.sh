@@ -8,7 +8,6 @@
 #────────────────────────────────────────────────────────────
 set -Eeuo pipefail
 
-
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  📦 OVERLEAF POD CONFIGURATION
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -166,15 +165,56 @@ setup_service_env_vars() {
         grep -q "^MONGO_INITDB_ROOT_PASSWORD=" "$ENV_FILE" || echo "MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}" >> "$ENV_FILE"
         grep -q "^MONGO_INITDB_DATABASE=" "$ENV_FILE" || echo "MONGO_INITDB_DATABASE=${MONGODB_DB:-overleaf}" >> "$ENV_FILE"
         
-        # Overleaf MongoDB URL with replica set
+        # ✅ CRITICAL: Add the OVERLEAF_MONGO_URL that the application actually uses
         OVERLEAF_MONGO_URL="mongodb://localhost:27017/${MONGODB_DB:-overleaf}?replicaSet=overleaf"
         grep -q "^OVERLEAF_MONGO_URL=" "$ENV_FILE" || echo "OVERLEAF_MONGO_URL=${OVERLEAF_MONGO_URL}" >> "$ENV_FILE"
+        
+        # Generic MongoDB URL for template compatibility
         MONGODB_URL="$OVERLEAF_MONGO_URL"
         grep -q "^MONGODB_URL=" "$ENV_FILE" || echo "MONGODB_URL=${MONGODB_URL}" >> "$ENV_FILE"
     fi
     
     # Create MongoDB initialization scripts
     create_mongo_replica_set_script
+}
+
+# ── Initialize MongoDB Replica Set for Overleaf
+initialize_mongo_replica_set() {
+    info "Initializing MongoDB replica set for Overleaf..."
+    
+    # Wait for MongoDB to be ready
+    local max_attempts=30
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        if podman exec "${CONTAINER_NAME}-mongodb" mongosh --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
+            break
+        fi
+        info "Waiting for MongoDB to be ready... (attempt $attempt/$max_attempts)"
+        sleep 2
+        ((attempt++))
+    done
+    
+    if [ $attempt -gt $max_attempts ]; then
+        error "MongoDB failed to start within expected time"
+    fi
+    
+    # Initialize replica set
+    podman exec "${CONTAINER_NAME}-mongodb" mongosh --eval "
+    try {
+        rs.status();
+        print('✅ Replica set already exists');
+    } catch (e) {
+        print('🔧 Initializing replica set for Overleaf...');
+        rs.initiate({ 
+            _id: 'overleaf', 
+            members: [{ _id: 0, host: '127.0.0.1:27017' }] 
+        });
+        print('✅ Replica set initialized successfully');
+    }
+    " 2>/dev/null || warn "Replica set initialization may have failed"
+    
+    okay "MongoDB replica set ready for Overleaf"
 }
 
 # ── Create MongoDB replica set initialization for Overleaf
@@ -210,7 +250,7 @@ EOC
     info "MongoDB replica set scripts created"
 }
 
-# ── Override deploy_service_containers to add MongoDB replica set configuration
+# ── Override deploy_service_containers to add MongoDB replica set initialization
 deploy_service_containers() {
     # Deploy Redis for Overleaf sessions
     if $ENABLE_REDIS; then
@@ -264,6 +304,9 @@ deploy_service_containers() {
             mongo:6.0 --replSet overleaf
         
         okay "MongoDB with replica set deployed for Overleaf"
+        
+        # ✅ CRITICAL: Initialize the replica set after MongoDB starts
+        initialize_mongo_replica_set
     fi
 }
 
