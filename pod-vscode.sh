@@ -185,8 +185,7 @@ podman run -d \
     --memory 3072m \
     --cpu-shares 3072 \
     --cpus 2.5 \
-    --env PUID=$HOST_UID \
-    --env PGID=$HOST_GID \
+    --userns=keep-id:uid=1000,gid=1000 \
     --env TZ=Africa/Tunis \
     --env LANG=en_US.UTF-8 \
     --env LC_ALL=en_US.UTF-8 \
@@ -195,10 +194,14 @@ podman run -d \
     --env DEFAULT_WORKSPACE=/config/workspace \
     --volume ~/podman_data/vscode/config:/config:Z \
     --volume ~/podman_data/vscode/workspace:/config/workspace:Z \
+    --health-cmd "curl -f http://localhost:8443 || exit 1" \
+    --health-interval 60s \
+    --health-timeout 15s \
+    --health-retries 5 \
     "$CUSTOM_IMAGE"
 
 # Deploy OAuth2-Proxy container
-echo "🔐 Deploying Google OAuth2-Proxy container (Alpine)..."
+echo "🔐 Deploying Google OAuth2-Proxy container..."
 podman run -d \
     --pod "$POD_NAME" \
     --name google-oauth \
@@ -214,11 +217,22 @@ podman run -d \
     --env OAUTH2_PROXY_PROVIDER=google \
     --env OAUTH2_PROXY_EMAIL_DOMAINS=* \
     --env OAUTH2_PROXY_REDIRECT_URL=https://vscode.bluewave.work/oauth2/callback \
+    --env OAUTH2_PROXY_PING_PATH=/ping \
     --env OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO="https://code.visualstudio.com/assets/images/code-stable.png" \
     --env OAUTH2_PROXY_TITLE="vscode-server" \
     --env OAUTH2_PROXY_FOOTER="VS Code Server with OAuth Protection" \
     --env OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt \
+    --env OAUTH2_PROXY_COOKIE_HTTPONLY=true \
+    --env OAUTH2_PROXY_COOKIE_SECURE=true \
+    --env OAUTH2_PROXY_COOKIE_SAMESITE=lax \
+    --env OAUTH2_PROXY_SESSION_STORE_TYPE=cookie \
+    --env OAUTH2_PROXY_COOKIE_EXPIRE=168h \
+    --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:4180/ping || exit 1" \
+    --health-interval 30s \
+    --health-timeout 10s \
+    --health-retries 3 \
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
+
 
 # Get assigned IP
 ASSIGNED_IP=$(podman pod inspect "$POD_NAME" --format '{{.InfraContainerID}}' | xargs podman inspect --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
