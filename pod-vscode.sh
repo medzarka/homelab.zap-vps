@@ -171,6 +171,7 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4180:4180 \
+    --userns=keep-id \
     --label homepage.group="Development" \
     --label homepage.name="VSCode Dev Pod" \
     --label homepage.icon="vscode" \

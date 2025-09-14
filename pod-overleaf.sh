@@ -117,6 +117,7 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4181:4181 \
+    --userns=keep-id \
     --label homepage.group="Productivity" \
     --label homepage.name="Overleaf LaTeX Editor" \
     --label homepage.icon="overleaf" \
