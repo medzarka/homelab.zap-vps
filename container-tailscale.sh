@@ -62,7 +62,7 @@ podman run -d \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
-    --network "host" \
+    --network "${NETWORK_NAME}" \
     --device=/dev/net/tun \
     --privileged \
     --cap-add=NET_ADMIN,NET_RAW \
