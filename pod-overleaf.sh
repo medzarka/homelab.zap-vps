@@ -88,23 +88,6 @@ try {
 }
 EOF
 
-# Create MongoDB health check script
-cat > ~/podman_data/overleaf/mongo/init/healthcheck.js << 'EOF'
-try {
-    var status = rs.status();
-    if (status.ok === 1) {
-        print("MongoDB replica set is healthy");
-        quit(0);
-    } else {
-        print("MongoDB replica set is not healthy");
-        quit(1);
-    }
-} catch (e) {
-    print("Error checking MongoDB health: " + e);
-    quit(1);
-}
-EOF
-
 # Clean up existing pod
 echo "🧹 Cleaning up existing deployment..."
 systemctl --user stop "pod-$POD_NAME.service" 2>/dev/null || true
@@ -159,7 +142,7 @@ podman run -d \
     --health-interval 60s \
     --health-timeout 5s \
     --health-retries 3 \
-    redis:7-alpine \
+    redis:8-alpine \
     redis-server --appendonly yes
 
 # Wait for MongoDB and Redis to be ready
@@ -207,7 +190,7 @@ podman run -d \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
     --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \
     --env OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4181 \
-    --env OAUTH2_PROXY_UPSTREAMS=http://localhost:3000 \
+    --env OAUTH2_PROXY_UPSTREAMS=http://localhost:80 \
     --env OAUTH2_PROXY_PROVIDER=google \
     --env OAUTH2_PROXY_EMAIL_DOMAINS=* \
     --env OAUTH2_PROXY_REDIRECT_URL=https://overleaf.bluewave.work/oauth2/callback \
@@ -237,6 +220,10 @@ echo "⚙️ Creating systemd service..."
 mkdir -p ~/.config/systemd/user
 podman generate systemd --new --name "$POD_NAME" --files
 mv "pod-$POD_NAME.service" ~/.config/systemd/user/
+mv "container-overleaf-app.service" ~/.config/systemd/user/
+mv "container-overleaf-mongo.service" ~/.config/systemd/user/
+mv "container-overleaf-redis.service" ~/.config/systemd/user/
+mv "container-overleaf-google-oauth.service" ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable "pod-$POD_NAME.service"
 
