@@ -213,7 +213,7 @@ podman run -d \
     --env OAUTH2_PROXY_UPSTREAMS=http://localhost:8443 \
     --env OAUTH2_PROXY_PROVIDER=google \
     --env OAUTH2_PROXY_EMAIL_DOMAINS=* \
-    --env OAUTH2_PROXY_REDIRECT_URL=http://vscode.bluewave.work/oauth2/callback \
+    --env OAUTH2_PROXY_REDIRECT_URL=https://vscode.bluewave.work/oauth2/callback \
     --env OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO="https://code.visualstudio.com/assets/images/code-stable.png" \
     --env OAUTH2_PROXY_TITLE="vscode-server" \
     --env OAUTH2_PROXY_FOOTER="VS Code Server with OAuth Protection" \
