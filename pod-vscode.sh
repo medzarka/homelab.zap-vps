@@ -146,6 +146,19 @@ echo "✅ Custom image built successfully!"
 mkdir -p ~/podman_data/vscode/{config,workspace}
 sudo chown -R mgrsys:mgrsys ~/podman_data/vscode
 
+# OAuth emails file
+OAUTH_EMAILS_FILE=~/podman_data/vscode/allowed_emails.txt
+if [ ! -f "$OAUTH_EMAILS_FILE" ]; then
+    echo "Creating empty allowed emails file for OAuth..."
+    touch "$OAUTH_EMAILS_FILE"
+    echo "You can add allowed email addresses later in: $OAUTH_EMAILS_FILE"
+    # Set permissions
+    chmod 600 "$OAUTH_EMAILS_FILE"
+    # add my default email to the allowed list
+    echo "medzarka@gmail.com" >> "$OAUTH_EMAILS_FILE"
+    echo "Added default email to allowed list"
+fi
+
 # Clean up existing pod
 echo "🧹 Cleaning up existing deployment..."
 systemctl --user stop "pod-$POD_NAME.service" 2>/dev/null || true
@@ -192,6 +205,7 @@ podman run -d \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
+    --volume ${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
     --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \
@@ -200,6 +214,11 @@ podman run -d \
     --env OAUTH2_PROXY_PROVIDER=google \
     --env OAUTH2_PROXY_EMAIL_DOMAINS=* \
     --env OAUTH2_PROXY_REDIRECT_URL=http://localhost:4180/oauth2/callback \
+    --env OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO="https://code.visualstudio.com/assets/images/code-stable.png" \
+    --env OAUTH2_PROXY_TITLE="vscode-server" \
+    --env OAUTH2_PROXY_FOOTER="VS Code Server with OAuth Protection" \
+    --env OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt
+
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
 
 # Get assigned IP
