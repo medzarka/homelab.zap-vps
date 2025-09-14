@@ -61,10 +61,10 @@ else
     echo "✅ Using existing Google OAuth Client Secret secret"
 fi
 
-# Create directories for persistent storage, and Fix ownership using podman unshare
+# Create directories for persistent storage
 mkdir -p ~/podman_data/overleaf/{mongo/db,mongo/configdb,mongo/init,redis/data,overleaf/data}
 sudo chown -R mgrsys:mgrsys ~/podman_data/overleaf
-podman unshare chown -R 1000:1000 ~/podman_data/overleaf/
+#podman unshare chown -R 1000:1000 ~/podman_data/overleaf/
 
 # OAuth emails file
 OAUTH_EMAILS_FILE=~/podman_data/overleaf/allowed_emails.txt
@@ -99,6 +99,7 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4181:4181 \
+    --userns=keep-id \
     --label homepage.group="Productivity" \
     --label homepage.name="Overleaf LaTeX Editor" \
     --label homepage.icon="overleaf" \
