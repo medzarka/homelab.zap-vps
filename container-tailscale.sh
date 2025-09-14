@@ -62,7 +62,7 @@ podman run -d \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
-    --network "host" \ 
+    --network "host" \
     --privileged \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \
