@@ -136,11 +136,11 @@ podman run -d \
     --volume ~/podman_data/overleaf/mongo/db:/data/db:Z,U \
     --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z,U \
     --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z,U \
-    --health-cmd "mongosh --eval 'rs.status()' --quiet || exit 1" \
+    --health-cmd "mongosh --eval 'try { rs.status(); } catch(e) { rs.initiate({ _id: \"overleaf\", members: [{ _id: 0, host: \"127.0.0.1:27017\" }] }); }' --quiet" \
     --health-interval 30s \
-    --health-timeout 10s \
-    --health-retries 5 \
-    --health-start-period 60s \
+    --health-timeout 15s \
+    --health-retries 10 \
+    --health-start-period 120s \
     mongo:6.0 \
     mongod --replSet overleaf
 
@@ -185,7 +185,7 @@ podman run -d \
     --env ENABLE_CONVERSIONS=true \
     --env EMAIL_CONFIRMATION_DISABLED="false" \
     --env OVERLEAF_DISABLE_SIGNUPS="true" \
-    --volume ~/podman_data/overleaf/overleaf/data:/var/lib/sharelatex:Z,U \
+    --volume ~/podman_data/overleaf/overleaf/data:/var/lib/overleaf:Z,U \
     --health-cmd "curl -f http://localhost:3000/status || exit 1" \
     --health-interval 60s \
     --health-timeout 10s \
