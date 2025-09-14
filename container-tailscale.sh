@@ -8,8 +8,8 @@ set -e
 echo "🌐 Starting Tailscale exit node deployment..."
 
 # Check if network exists (created by cloudflare script)
-if ! podman network exists zap-vps-network; then
-    echo "❌ Error: Network 'zap-vps-network' does not exist."
+if ! podman network exists zap-vps-podman-network; then
+    echo "❌ Error: Network 'zap-vps-podman-network' does not exist."
     echo "Please run the Cloudflare script first to create the network."
     exit 1
 fi
@@ -63,7 +63,7 @@ podman run -d \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
-    --network zap-vps-network \
+    --network zap-vps-podman-network \
     --privileged \
     --volume /dev/net/tun:/dev/net/tun:rw \
     --volume ~/podman_data/tailscale:/var/lib/tailscale:Z \
