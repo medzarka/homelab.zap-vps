@@ -1,6 +1,6 @@
 #!/bin/bash
 #────────────────────────────────────────────────────────────
-#  ☁️ SIMPLE CLOUDFLARE TUNNEL WITH PODMAN SECRETS
+#  ☁️ SIMPLE CLOUDFLARE TUNNEL WITH PODMAN SECRETS (FIXED)
 #────────────────────────────────────────────────────────────
 # Uses Podman secrets to store the tunnel token securely
 #────────────────────────────────────────────────────────────
@@ -108,8 +108,7 @@ podman run -d \
     --memory 256m \
     --cpu-shares 512 \
     --network "$NETWORK_NAME" \
-    --secret cloudflare_tunnel_token \
-    --secret-env cloudflare_tunnel_token:TUNNEL_TOKEN \
+    --secret cloudflare_tunnel_token,type=env,target=TUNNEL_TOKEN \
     --volume ~/podman_data/cloudflare/data:/home/cloudflared/.cloudflared:Z \
     --label homepage.group="Network" \
     --label homepage.name="Cloudflare Tunnel" \
