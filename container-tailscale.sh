@@ -63,11 +63,7 @@ podman run -d \
     --memory 256m \
     --cpu-shares 512 \
     --network "$NETWORK_NAME" \
-    --userns=auto \
-    --uidmap=0:1000:1 \
-    --uidmap=1:100000:65535 \
-    --gidmap=0:1000:1 \
-    --gidmap=1:100000:65535 \
+    --userns=keep-id:uid=1000,gid=1000 \
     --privileged \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \
