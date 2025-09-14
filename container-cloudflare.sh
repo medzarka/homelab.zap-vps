@@ -1,21 +1,23 @@
 #!/bin/bash
 #────────────────────────────────────────────────────────────
-#  ☁️ SIMPLE CLOUDFLARE TUNNEL WITH DHCP-STYLE IP ASSIGNMENT
+#  ☁️ SIMPLE CLOUDFLARE TUNNEL WITH PODMAN SECRETS
+#────────────────────────────────────────────────────────────
+# Uses Podman secrets to store the tunnel token securely
 #────────────────────────────────────────────────────────────
 
 set -e
 
-echo "☁️ Starting Cloudflare Tunnel deployment with DHCP-style IP assignment..."
+echo "☁️ Starting Cloudflare Tunnel deployment with Podman secrets..."
 
 # Network Configuration
 NETWORK_NAME="zap-vps-podman-network"
 NETWORK_SUBNET="10.2.1.0/24"
-NETWORK_IP_RANGE="10.2.1.128/25"  # IPs 10.88.1.128-10.88.1.255 automatically assigned
+NETWORK_IP_RANGE="10.2.1.128/25"
 NETWORK_GATEWAY="10.2.1.1"
 
-# Handle Cloudflare token (ask once, save securely, reuse)
-if [[ ! -f ~/.cloudflare_token ]]; then
-    echo "🔑 First time setup - Cloudflare tunnel token required"
+# Check if secret exists, create if needed
+if ! podman secret exists cloudflare_tunnel_token; then
+    echo "🔑 Cloudflare tunnel token secret not found"
     echo "Get your token from: https://one.dash.cloudflare.com/"
     echo "Navigate to: Networks → Tunnels → Your Tunnel → Configure"
     echo ""
@@ -28,16 +30,12 @@ if [[ ! -f ~/.cloudflare_token ]]; then
         exit 1
     fi
     
-    # Save token securely
-    echo "$CLOUDFLARE_TOKEN" > ~/.cloudflare_token
-    chmod 600 ~/.cloudflare_token
-    echo "✅ Token saved securely to ~/.cloudflare_token"
+    # Create secret
+    echo "$CLOUDFLARE_TOKEN" | podman secret create cloudflare_tunnel_token -
+    echo "✅ Token saved securely as Podman secret"
 else
-    echo "✅ Using saved Cloudflare token"
+    echo "✅ Using existing Cloudflare tunnel token secret"
 fi
-
-# Read token from secure file
-CLOUDFLARE_TOKEN=$(cat ~/.cloudflare_token)
 
 # Create custom network with DHCP-style IP assignment
 if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
@@ -53,13 +51,14 @@ else
 fi
 
 # Create directories
-mkdir -p ~/podman_data/cloudflare-custom
-mkdir -p ~/podman_data/cloudflare
+mkdir -p ~/podman_data/cloudflare/custom
+mkdir -p ~/podman_data/cloudflare/data
+sudo chown -R mgrsys:mgrsys ~/podman_data/cloudflare
 
 # Create Dockerfile if it doesn't exist
-if [[ ! -f ~/podman_data/cloudflare-custom/Dockerfile ]]; then
+if [[ ! -f ~/podman_data/cloudflare/custom/Dockerfile ]]; then
     echo "📄 Creating custom Dockerfile..."
-    cat > ~/podman_data/cloudflare-custom/Dockerfile << 'EOF'
+    cat > ~/podman_data/cloudflare/custom/Dockerfile << 'EOF'
 FROM alpine:latest
 
 # Install dependencies
@@ -94,28 +93,24 @@ fi
 
 # Build custom image
 echo "🔨 Building custom Cloudflared image..."
-podman build -t localhost/cloudflared-custom:latest ~/podman_data/cloudflare-custom/
-
-# Create environment file with actual token
-cat > ~/podman_data/cloudflare/.env << EOF
-TUNNEL_TOKEN=$CLOUDFLARE_TOKEN
-EOF
+podman build -t localhost/cloudflared-custom:latest ~/podman_data/cloudflare/custom/
 
 # Clean up existing container
 echo "🧹 Cleaning up existing deployment..."
 systemctl --user stop container-cloudflare.service 2>/dev/null || true
 podman rm -f cloudflare 2>/dev/null || true
 
-# Deploy Cloudflare Tunnel with automatic IP assignment
-echo "🚀 Deploying Cloudflare Tunnel with automatic IP assignment..."
+# Deploy Cloudflare Tunnel with secret mounted as environment variable
+echo "🚀 Deploying Cloudflare Tunnel with Podman secret..."
 podman run -d \
     --name cloudflare \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
     --network "$NETWORK_NAME" \
-    --env-file ~/podman_data/cloudflare/.env \
-    --volume ~/podman_data/cloudflare:/home/cloudflared/.cloudflared:Z \
+    --secret cloudflare_tunnel_token \
+    --secret-env cloudflare_tunnel_token:TUNNEL_TOKEN \
+    --volume ~/podman_data/cloudflare/data:/home/cloudflared/.cloudflared:Z \
     --label homepage.group="Network" \
     --label homepage.name="Cloudflare Tunnel" \
     --label homepage.icon="cloudflare" \
@@ -128,7 +123,7 @@ podman run -d \
     localhost/cloudflared-custom:latest tunnel --metrics 0.0.0.0:2000 run
 
 # Get the assigned IP address
-echo "⏳ Waiting for container to start and get IP..."
+echo "⏳ Waiting for container to start..."
 sleep 10
 ASSIGNED_IP=$(podman inspect cloudflare --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
 
@@ -141,7 +136,7 @@ systemctl --user daemon-reload
 systemctl --user enable container-cloudflare.service
 
 echo ""
-echo "🎉 Cloudflare Tunnel deployed with DHCP-style IP assignment!"
+echo "🎉 Cloudflare Tunnel deployed with Podman secrets!"
 echo ""
 echo "🌐 Network Configuration:"
 echo "   Network: $NETWORK_NAME"
@@ -150,9 +145,14 @@ echo "   DHCP IP Range: $NETWORK_IP_RANGE"
 echo "   Gateway: $NETWORK_GATEWAY"
 echo "   Assigned IP: $ASSIGNED_IP"
 echo ""
+echo "🔐 Security Features:"
+echo "   ✅ Token stored as Podman secret (secure)"
+echo "   ✅ Secret mounted as environment variable"
+echo "   ✅ No token files on filesystem"
+echo "   ✅ Secret only accessible to container"
+echo ""
 echo "📦 Features:"
 echo "   ✅ Custom Alpine image with health checks"
-echo "   ✅ Token saved securely (only asked once)"  
 echo "   ✅ DHCP-style automatic IP assignment"
 echo "   ✅ IP assigned from controlled range"
 echo "   ✅ Homepage integration ready"
@@ -165,12 +165,9 @@ echo "  Status:   systemctl --user status container-cloudflare.service"
 echo "  Logs:     podman logs -f cloudflare"
 echo "  Check IP: podman inspect cloudflare --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}'"
 echo ""
-echo "🌐 Network Management:"
-echo "  View IPs: podman network inspect $NETWORK_NAME | grep -A5 Containers"
-echo "  List:     podman network ls"
-echo ""
-echo "🔑 Token Management:"
-echo "  View:   cat ~/.cloudflare_token"
-echo "  Reset:  rm ~/.cloudflare_token (will prompt on next run)"
+echo "🔐 Secret Management:"
+echo "  List:     podman secret ls"
+echo "  Inspect:  podman secret inspect cloudflare_tunnel_token"
+echo "  Remove:   podman secret rm cloudflare_tunnel_token (will prompt on next run)"
 echo ""
 echo "🌐 Configure your tunnel at: https://one.dash.cloudflare.com/"
