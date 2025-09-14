@@ -67,7 +67,7 @@ podman run -d \
     --privileged \
     --cap-add=NET_ADMIN,NET_RAW \
     --volume ~/podman_data/tailscale/data:/var/lib/tailscale:Z \
-    --secret tailscale_auth_key,type=env,target=TS_AUTHKEY \
+    --env TS_AUTHKEY=$(podman run --rm --secret tailscale_auth_key alpine cat "/run/secrets/tailscale_auth_key") \
     --env TS_STATE_DIR=/var/lib/tailscale \
     --env TS_EXTRA_ARGS="--advertise-exit-node --accept-routes --advertise-routes=$NETWORK_SUBNET --ssh" \
     --env TS_HOSTNAME=zap-vps-gateway \
