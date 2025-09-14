@@ -171,6 +171,7 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4180:4180 \
+    --userns=keep-id:uid=1000,gid=1000 \
     --label homepage.group="Development" \
     --label homepage.name="VSCode Dev Pod" \
     --label homepage.icon="vscode" \
@@ -185,7 +186,6 @@ podman run -d \
     --memory 3072m \
     --cpu-shares 3072 \
     --cpus 2.5 \
-    --userns=keep-id:uid=1000,gid=1000 \
     --env TZ=Africa/Tunis \
     --env LANG=en_US.UTF-8 \
     --env LC_ALL=en_US.UTF-8 \
