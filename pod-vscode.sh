@@ -14,8 +14,6 @@ echo "🎛️ Starting VSCode pod deployment with custom image..."
 NETWORK_NAME="zap-vps-podman-network"
 POD_NAME="pod-vscode"
 CUSTOM_IMAGE="localhost/vscode-custom:latest"
-HOST_UID=1000
-HOST_GID=1000
 
 # Your custom Dockerfile content
 CONTAINERFILE_CONTENT='
@@ -171,7 +169,7 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4180:4180 \
-    --userns=keep-id:uid=911,gid=911 \
+    --userns=keep-id:uid=911,gid=911 \ 
     --label homepage.group="Development" \
     --label homepage.name="VSCode Dev Pod" \
     --label homepage.icon="vscode" \
@@ -182,7 +180,7 @@ podman pod create \
 echo "💻 Deploying custom VSCode container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name vscode \
+    --name vscode-app \
     --memory 3072m \
     --cpu-shares 3072 \
     --cpus 2.5 \
@@ -204,10 +202,11 @@ podman run -d \
 echo "🔐 Deploying Google OAuth2-Proxy container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name google-oauth \
+    --name vscode-google-oauth \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
+    --user 1000:1000 \
     --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z,U" \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \

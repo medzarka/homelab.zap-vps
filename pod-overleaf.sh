@@ -117,7 +117,6 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4181:4181 \
-    --userns=keep-id \
     --label homepage.group="Productivity" \
     --label homepage.name="Overleaf LaTeX Editor" \
     --label homepage.icon="overleaf" \
@@ -128,7 +127,7 @@ podman pod create \
 echo "🗄️ Deploying MongoDB container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name mongo-overleaf \
+    --name overleaf-mongo \
     --memory 1024m \
     --cpu-shares 1024 \
     --cpus 1.0 \
@@ -148,7 +147,7 @@ podman run -d \
 echo "📦 Deploying Redis container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name redis-overleaf \
+    --name overleaf-redis \
     --memory 256m \
     --cpu-shares 512 \
     --cpus 0.5 \
