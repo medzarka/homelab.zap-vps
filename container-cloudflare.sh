@@ -1,140 +1,170 @@
 #!/bin/bash
 #────────────────────────────────────────────────────────────
-#  🌐 SIMPLE TAILSCALE EXIT NODE WITH PODMAN SECRETS & USER MAPPING
+#  ☁️ SIMPLE CLOUDFLARE TUNNEL WITH PODMAN SECRETS (FIXED)
 #────────────────────────────────────────────────────────────
-
 
 set -e
 
-echo "🌐 Starting Tailscale exit node deployment ..."
+echo "☁️ Starting Cloudflare Tunnel deployment with Podman secrets..."
 
 # Network Configuration
 NETWORK_NAME="zap-vps-podman-network"
 NETWORK_SUBNET="10.2.1.0/24"
-
-# Check if network exists
-if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
-    echo "❌ Error: Network '$NETWORK_NAME' does not exist."
-    echo "Please run the Cloudflare script first to create the network."
-    exit 1
-fi
-
-echo "✅ Network '$NETWORK_NAME' found"
+NETWORK_IP_RANGE="10.2.1.128/25"
+NETWORK_GATEWAY="10.2.1.1"
 
 # Check if secret exists, create if needed
-if ! podman secret exists tailscale_auth_key; then
-    echo "🔑 Tailscale auth key secret not found"
-    echo "Get your auth key from: https://login.tailscale.com/admin/settings/keys"
+if ! podman secret exists cloudflare_tunnel_token; then
+    echo "🔑 Cloudflare tunnel token secret not found"
+    echo "Get your token from: https://one.dash.cloudflare.com/"
+    echo "Navigate to: Networks → Tunnels → Your Tunnel → Configure"
     echo ""
-    read -rsp "Enter your Tailscale auth key: " TAILSCALE_AUTHKEY
+    read -rsp "Enter your Cloudflare tunnel token: " CLOUDFLARE_TOKEN
     echo
     
-    if [[ -z "$TAILSCALE_AUTHKEY" ]]; then
-        echo "❌ Auth key cannot be empty!"
+    # Validate token is not empty
+    if [[ -z "$CLOUDFLARE_TOKEN" ]]; then
+        echo "❌ Token cannot be empty!"
         exit 1
     fi
     
-    echo "$TAILSCALE_AUTHKEY" | podman secret create tailscale_auth_key -
-    echo "✅ Auth key saved securely as Podman secret"
+    # Create secret
+    echo "$CLOUDFLARE_TOKEN" | podman secret create cloudflare_tunnel_token -
+    echo "✅ Token saved securely as Podman secret"
 else
-    echo "✅ Using existing Tailscale auth key secret"
+    echo "✅ Using existing Cloudflare tunnel token secret"
 fi
 
-# Enable IP forwarding on host (required for exit node)
-echo "🌍 Enabling IP forwarding for exit node functionality..."
-echo 'net.ipv4.ip_forward = 1' | sudo tee /etc/sysctl.d/99-tailscale.conf > /dev/null
-echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf > /dev/null
-sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+# Create custom network with DHCP-style IP assignment
+if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
+    echo "🌐 Creating custom network with DHCP-style IP assignment: $NETWORK_NAME"
+    podman network create \
+        --subnet "$NETWORK_SUBNET" \
+        --ip-range "$NETWORK_IP_RANGE" \
+        --gateway "$NETWORK_GATEWAY" \
+        "$NETWORK_NAME"
+    echo "✅ Network created - IPs will be auto-assigned from range $NETWORK_IP_RANGE"
+else
+    echo "✅ Network $NETWORK_NAME already exists"
+fi
 
-# Create directories with proper ownership
-mkdir -p ~/podman_data/tailscale/data
-sudo chown -R mgrsys:mgrsys ~/podman_data/tailscale
+# Create directories
+mkdir -p ~/podman_data/cloudflare/custom
+mkdir -p ~/podman_data/cloudflare/data
+sudo chown -R mgrsys:mgrsys ~/podman_data/cloudflare
+
+# Create Dockerfile if it doesn't exist
+if [[ ! -f ~/podman_data/cloudflare/custom/Dockerfile ]]; then
+    echo "📄 Creating custom Dockerfile..."
+    cat > ~/podman_data/cloudflare/custom/Dockerfile << 'EOF'
+FROM alpine:latest
+
+# Install dependencies
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    wget
+
+# Download and install cloudflared
+RUN case $(uname -m) in \
+        x86_64) ARCH="amd64" ;; \
+        aarch64) ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $(uname -m)" && exit 1 ;; \
+    esac && \
+    wget -q "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}" -O /usr/local/bin/cloudflared && \
+    chmod +x /usr/local/bin/cloudflared
+
+# Create non-root user
+RUN addgroup -g 1000 cloudflared && \
+    adduser -u 1000 -G cloudflared -s /bin/sh -D cloudflared
+
+# Create config directory
+RUN mkdir -p /home/cloudflared/.cloudflared && \
+    chown -R cloudflared:cloudflared /home/cloudflared
+
+USER cloudflared
+WORKDIR /home/cloudflared
+
+ENTRYPOINT ["cloudflared"]
+EOF
+fi
+
+# Build custom image
+echo "🔨 Building custom Cloudflared image..."
+podman build -t localhost/cloudflared-custom:latest ~/podman_data/cloudflare/custom/
 
 # Clean up existing container
 echo "🧹 Cleaning up existing deployment..."
-systemctl --user stop container-tailscale.service 2>/dev/null || true
-podman rm -f tailscale 2>/dev/null || true
+systemctl --user stop container-cloudflare.service 2>/dev/null || true
+podman rm -f cloudflare 2>/dev/null || true
 
-# Deploy Tailscale with user mapping and custom network
-echo "🚀 Deploying Tailscale with UID mapping (0→1000) and custom network..."
+# Deploy Cloudflare Tunnel with secret mounted as environment variable
+echo "🚀 Deploying Cloudflare Tunnel with Podman secret..."
 podman run -d \
-    --name tailscale \
+    --name cloudflare \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
     --network "$NETWORK_NAME" \
-    --userns=auto \
-    --uidmap=0:1000:1 \
-    --uidmap=1:100000:65535 \
-    --gidmap=0:1000:1 \
-    --gidmap=1:100000:65535 \
-    --privileged \
-    --cap-add=NET_ADMIN \
-    --cap-add=NET_RAW \
-    --volume /dev/net/tun:/dev/net/tun:rw \
-    --volume ~/podman_data/tailscale/data:/var/lib/tailscale:Z \
-    --secret tailscale_auth_key,type=env,target=TS_AUTHKEY \
-    --env TS_STATE_DIR=/var/lib/tailscale \
-    --env TS_EXTRA_ARGS="--advertise-exit-node --accept-routes --advertise-routes=$NETWORK_SUBNET --ssh" \
-    --env TS_HOSTNAME=zap-vps-gateway \
+    --secret cloudflare_tunnel_token,type=env,target=TUNNEL_TOKEN \
+    --volume ~/podman_data/cloudflare/data:/home/cloudflared/.cloudflared:Z \
     --label homepage.group="Network" \
-    --label homepage.name="Tailscale Exit Node" \
-    --label homepage.icon="tailscale" \
-    --label homepage.href="https://login.tailscale.com/admin/machines" \
-    --label homepage.description="VPN exit node and network gateway" \
-    --health-cmd "tailscale status >/dev/null 2>&1" \
+    --label homepage.name="Cloudflare Tunnel" \
+    --label homepage.icon="cloudflare" \
+    --label homepage.href="https://one.dash.cloudflare.com" \
+    --label homepage.description="Secure tunnel to homelab services" \
+    --health-cmd "curl -f http://localhost:2000/ready || exit 1" \
     --health-interval 60s \
     --health-timeout 10s \
     --health-retries 3 \
-    tailscale/tailscale:latest
+    localhost/cloudflared-custom:latest tunnel --metrics 0.0.0.0:2000 run
 
-# Get assigned IP
+# Get the assigned IP address
 echo "⏳ Waiting for container to start..."
-sleep 15
-ASSIGNED_IP=$(podman inspect tailscale --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
+sleep 10
+ASSIGNED_IP=$(podman inspect cloudflare --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
 
 # Generate systemd service
 echo "⚙️ Creating systemd service..."
 mkdir -p ~/.config/systemd/user
-podman generate systemd --new --name tailscale --files
-mv container-tailscale.service ~/.config/systemd/user/
+podman generate systemd --new --name cloudflare --files
+mv container-cloudflare.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable container-tailscale.service
+systemctl --user enable container-cloudflare.service
 
 echo ""
-echo "🎉 Tailscale exit node deployed with user mapping and Podman secrets!"
-echo ""
-echo "👤 User Mapping:"
-echo "   Container UID 0 (root) → Host UID 1000 (mgrsys)"
-echo "   Files created by container appear owned by mgrsys"
+echo "🎉 Cloudflare Tunnel deployed with Podman secrets!"
 echo ""
 echo "🌐 Network Configuration:"
-echo "   Network: $NETWORK_NAME (user-defined, secure)"
-echo "   Subnet: $NETWORK_SUBNET"
+echo "   Network: $NETWORK_NAME"
+echo "   Subnet: $NETWORK_SUBNET"  
+echo "   DHCP IP Range: $NETWORK_IP_RANGE"
+echo "   Gateway: $NETWORK_GATEWAY"
 echo "   Assigned IP: $ASSIGNED_IP"
-echo "   Host Network: NOT used (more secure)"
-echo ""
-echo "🚀 Exit Node Features:"
-echo "   ✅ Exit node advertised"
-echo "   ✅ Subnet router for $NETWORK_SUBNET"
-echo "   ✅ SSH access enabled"
-echo "   ✅ Proper capabilities (NET_ADMIN, NET_RAW)"
 echo ""
 echo "🔐 Security Features:"
-echo "   ✅ Auth key stored as Podman secret"
-echo "   ✅ User namespace isolation"
-echo "   ✅ Custom network (not host network)"
-echo "   ✅ File ownership mapped correctly"
+echo "   ✅ Token stored as Podman secret (secure)"
+echo "   ✅ Secret mounted as environment variable"
+echo "   ✅ No token files on filesystem"
+echo "   ✅ Secret only accessible to container"
+echo ""
+echo "📦 Features:"
+echo "   ✅ Custom Alpine image with health checks"
+echo "   ✅ DHCP-style automatic IP assignment"
+echo "   ✅ IP assigned from controlled range"
+echo "   ✅ Homepage integration ready"
+echo "   ✅ Systemd service enabled"
 echo ""
 echo "🔧 Management Commands:"
-echo "  Start:     systemctl --user start container-tailscale.service"
-echo "  Stop:      systemctl --user stop container-tailscale.service"
-echo "  Status:    systemctl --user status container-tailscale.service"
-echo "  Logs:      podman logs -f tailscale"
-echo "  TS Status: podman exec tailscale tailscale status"
+echo "  Start:    systemctl --user start container-cloudflare.service"
+echo "  Stop:     systemctl --user stop container-cloudflare.service" 
+echo "  Status:   systemctl --user status container-cloudflare.service"
+echo "  Logs:     podman logs -f cloudflare"
+echo "  Check IP: podman inspect cloudflare --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}'"
 echo ""
-echo "⚠️  Important Next Steps:"
-echo "1. Go to https://login.tailscale.com/admin/machines"
-echo "2. Find your 'zap-vps-gateway' machine"
-echo "3. Enable 'Use as exit node' in machine settings"
-echo "4. Enable 'Subnet routes' for $NETWORK_SUBNET"
+echo "🔐 Secret Management:"
+echo "  List:     podman secret ls"
+echo "  Inspect:  podman secret inspect cloudflare_tunnel_token"
+echo "  Remove:   podman secret rm cloudflare_tunnel_token (will prompt on next run)"
+echo ""
+echo "🌐 Configure your tunnel at: https://one.dash.cloudflare.com/"
