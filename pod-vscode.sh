@@ -205,7 +205,7 @@ podman run -d \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
-    --volume ${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z \
+    --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z" \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
     --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \
