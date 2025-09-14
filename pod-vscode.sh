@@ -180,7 +180,7 @@ podman pod create \
 echo "💻 Deploying custom VSCode container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name vscode-app \
+    --name "vscode-app" \
     --memory 3072m \
     --cpu-shares 3072 \
     --cpus 2.5 \
@@ -202,7 +202,7 @@ podman run -d \
 echo "🔐 Deploying Google OAuth2-Proxy container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name vscode-google-oauth \
+    --name "vscode-google-oauth" \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
