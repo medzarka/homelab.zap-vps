@@ -62,7 +62,7 @@ podman run -d \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
-    --network "$NETWORK_NAME" \
+    --network "host" \ 
     --privileged \
     --cap-add=NET_ADMIN \
     --cap-add=NET_RAW \
@@ -97,7 +97,6 @@ systemctl --user daemon-reload
 systemctl --user enable container-tailscale.service
 systemctl --user restart container-tailscale.service
 
-
 echo ""
 echo "🎉 Tailscale exit node deployed with user mapping and Podman secrets!"
 echo ""
@@ -129,6 +128,11 @@ echo "  Stop:      systemctl --user stop container-tailscale.service"
 echo "  Status:    systemctl --user status container-tailscale.service"
 echo "  Logs:      podman logs -f tailscale"
 echo "  TS Status: podman exec tailscale tailscale status"
+echo ""
+echo "🔐 Secret Management:"
+echo "  List:     podman secret ls"
+echo "  Inspect:  podman secret inspect tailscale_auth_key"
+echo "  Remove:   podman secret rm tailscale_auth_key (will prompt on next run)"
 echo ""
 echo "⚠️  Important Next Steps:"
 echo "1. Go to https://login.tailscale.com/admin/machines"
