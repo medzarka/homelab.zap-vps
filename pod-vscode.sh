@@ -169,7 +169,6 @@ podman pod create \
     --name "${POD_NAME}" \
     --network "${NETWORK_NAME}" \
     --publish 4180:4180 \
-    --userns=keep-id:uid=911,gid=911 \
     --label homepage.group="Development" \
     --label homepage.name="VSCode Dev Pod" \
     --label homepage.icon="vscode" \
@@ -184,6 +183,8 @@ podman run -d \
     --memory 3072m \
     --cpu-shares 3072 \
     --cpus 2.5 \
+    --PUID 1000 \
+    --PGID 1000 \
     --env TZ=Africa/Tunis \
     --env LANG=en_US.UTF-8 \
     --env LC_ALL=en_US.UTF-8 \
@@ -234,6 +235,10 @@ podman run -d \
 
 # Get assigned IP
 ASSIGNED_IP=$(podman pod inspect "$POD_NAME" --format '{{.InfraContainerID}}' | xargs podman inspect --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
+
+# Update file permissions with podman unshare
+podman unshare chown -R 1000:1000 ~/podman_data/overleaf
+echo "✅ Updated ownership of persistent storage"
 
 # Generate systemd service
 echo "⚙️ Creating systemd service..."

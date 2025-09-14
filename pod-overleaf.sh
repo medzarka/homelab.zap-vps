@@ -64,7 +64,6 @@ fi
 # Create directories for persistent storage
 mkdir -p ~/podman_data/overleaf/{mongo/db,mongo/configdb,mongo/init,redis/data,overleaf/data}
 sudo chown -R mgrsys:mgrsys ~/podman_data/overleaf
-#podman unshare chown -R 1000:1000 ~/podman_data/overleaf/
 
 # OAuth emails file
 OAUTH_EMAILS_FILE=~/podman_data/overleaf/allowed_emails.txt
