@@ -95,6 +95,8 @@ podman generate systemd --new --name tailscale --files
 mv container-tailscale.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable container-tailscale.service
+systemctl --user restart container-tailscale.service
+
 
 echo ""
 echo "🎉 Tailscale exit node deployed with user mapping and Podman secrets!"
