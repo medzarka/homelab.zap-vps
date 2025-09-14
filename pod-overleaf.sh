@@ -114,6 +114,7 @@ podman run -d \
     --memory 1024m \
     --cpu-shares 1024 \
     --cpus 1.0 \
+    --user 1000:1000 \
     --volume ~/podman_data/overleaf/mongo/db:/data/db:Z,U \
     --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z,U \
     --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z,U \
@@ -133,6 +134,7 @@ podman run -d \
     --memory 256m \
     --cpu-shares 512 \
     --cpus 0.5 \
+    --user 1000:1000 \
     --volume ~/podman_data/overleaf/redis/data:/data:Z,U \
     --health-cmd "redis-cli ping" \
     --health-interval 60s \
@@ -153,6 +155,7 @@ podman run -d \
     --memory 2048m \
     --cpu-shares 2048 \
     --cpus 2.0 \
+    --user 1000:1000 \
     --env OVERLEAF_APP_NAME="ZAP-VPS Overleaf" \
     --env OVERLEAF_MONGO_URL=mongodb://localhost:27017/overleaf?replicaSet=overleaf \
     --env OVERLEAF_REDIS_HOST="localhost" \
@@ -179,6 +182,7 @@ podman run -d \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
+    --user 1000:1000 \
     --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z,U" \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
