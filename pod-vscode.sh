@@ -217,8 +217,7 @@ podman run -d \
     --env OAUTH2_PROXY_CUSTOM_SIGN_IN_LOGO="https://code.visualstudio.com/assets/images/code-stable.png" \
     --env OAUTH2_PROXY_TITLE="vscode-server" \
     --env OAUTH2_PROXY_FOOTER="VS Code Server with OAuth Protection" \
-    --env OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt
-
+    --env OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE=/etc/oauth2_proxy/emails.txt \
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
 
 # Get assigned IP
