@@ -194,18 +194,13 @@ podman run -d \
     --cpus 0.5 \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
-    --env OAUTH2_PROXY_COOKIE_SECRET=$(openssl rand -base64 32 | tr -d '\n') \
+    --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \
     --env OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 \
     --env OAUTH2_PROXY_UPSTREAMS=http://localhost:8443 \
     --env OAUTH2_PROXY_PROVIDER=google \
     --env OAUTH2_PROXY_EMAIL_DOMAINS=* \
     --env OAUTH2_PROXY_REDIRECT_URL=http://localhost:4180/oauth2/callback \
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
-
-# Initialize development environment
-echo "🔧 Initializing development environment..."
-sleep 20
-podman exec vscode /init-dev-env.sh
 
 # Get assigned IP
 ASSIGNED_IP=$(podman pod inspect "$POD_NAME" --format '{{.InfraContainerID}}' | xargs podman inspect --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
