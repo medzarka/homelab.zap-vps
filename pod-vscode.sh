@@ -241,6 +241,8 @@ echo "⚙️ Creating systemd service..."
 mkdir -p ~/.config/systemd/user
 podman generate systemd --new --name "$POD_NAME" --files
 mv "pod-$POD_NAME.service" ~/.config/systemd/user/
+mv "container-vscode-app.service" ~/.config/systemd/user/
+mv "container-vscode-google-oauth.service" ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable "pod-$POD_NAME.service"
 
