@@ -32,10 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pandoc \
         texlive-latex-base texlive-fonts-recommended \
         texlive-latex-extra texlive-lang-arabic \
-        texlive-fonts-recommended texlive-fonts-extra texlive-xetex \
+        texlive-fonts-recommended texlive-xetex \
         lmodern fonts-noto fonts-firacode && \
-    echo "abc ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/90-abc-nopasswd && \
-    chmod 440 /etc/sudoers.d/90-abc-nopasswd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
