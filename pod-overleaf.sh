@@ -115,8 +115,6 @@ podman run -d \
     --memory 1024m \
     --cpu-shares 1024 \
     --cpus 1.0 \
-    --env PUID=$HOST_UID \
-    --env PGID=$HOST_GID \
     --volume ~/podman_data/overleaf/mongo/db:/data/db:Z,U \
     --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z,U \
     --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z,U \
@@ -136,8 +134,6 @@ podman run -d \
     --memory 256m \
     --cpu-shares 512 \
     --cpus 0.5 \
-    --env PUID=$HOST_UID \
-    --env PGID=$HOST_GID \
     --volume ~/podman_data/overleaf/redis/data:/data:Z,U \
     --health-cmd "redis-cli ping" \
     --health-interval 60s \
@@ -158,8 +154,6 @@ podman run -d \
     --memory 2048m \
     --cpu-shares 2048 \
     --cpus 2.0 \
-    --env PUID=$HOST_UID \
-    --env PGID=$HOST_GID \
     --env OVERLEAF_APP_NAME="ZAP-VPS Overleaf" \
     --env OVERLEAF_MONGO_URL=mongodb://localhost:27017/overleaf?replicaSet=overleaf \
     --env OVERLEAF_REDIS_HOST="localhost" \
