@@ -232,7 +232,6 @@ podman run -d \
     --health-retries 3 \
     quay.io/oauth2-proxy/oauth2-proxy:latest-alpine
 
-
 # Get assigned IP
 ASSIGNED_IP=$(podman pod inspect "$POD_NAME" --format '{{.InfraContainerID}}' | xargs podman inspect --format '{{.NetworkSettings.Networks.'"$NETWORK_NAME"'.IPAddress}}' 2>/dev/null || echo "IP not assigned yet")
 

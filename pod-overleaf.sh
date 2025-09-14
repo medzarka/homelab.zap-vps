@@ -136,11 +136,12 @@ podman run -d \
     --volume ~/podman_data/overleaf/mongo/db:/data/db:Z,U \
     --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z,U \
     --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z,U \
-    --health-cmd "mongosh --eval 'load(\"/docker-entrypoint-initdb.d/healthcheck.js\")'" \
-    --health-interval 60s \
+    --health-cmd "mongosh --eval 'rs.status()' --quiet || exit 1" \
+    --health-interval 30s \
     --health-timeout 10s \
-    --health-retries 3 \
-    mongo:5.0 \
+    --health-retries 5 \
+    --health-start-period 60s \
+    mongo:6.0 \
     mongod --replSet overleaf
 
 # Deploy Redis container
@@ -176,13 +177,14 @@ podman run -d \
     --env PUID=$HOST_UID \
     --env PGID=$HOST_GID \
     --env OVERLEAF_APP_NAME="ZAP-VPS Overleaf" \
-    --env OVERLEAF_MONGO_URL=mongodb://localhost:27017/sharelatex \
-    --env OVERLEAF_REDIS_HOST=localhost \
-    --env OVERLEAF_REDIS_PORT=6379 \
+    --env OVERLEAF_MONGO_URL=mongodb://localhost:27017/overleaf?replicaSet=overleaf \
+    --env OVERLEAF_REDIS_HOST="localhost" \
     --env OVERLEAF_SITE_URL=https://overleaf.bluewave.work \
     --env OVERLEAF_NAV_TITLE="ZAP-VPS LaTeX Editor" \
-    --env ENABLED_LINKED_FILE_TYPES=url,project_file \
+    --env ENABLED_LINKED_FILE_TYPES=url,project_file,project_output_file \
     --env ENABLE_CONVERSIONS=true \
+    --env EMAIL_CONFIRMATION_DISABLED="false" \
+    --env OVERLEAF_DISABLE_SIGNUPS="true" \
     --volume ~/podman_data/overleaf/overleaf/data:/var/lib/sharelatex:Z,U \
     --health-cmd "curl -f http://localhost:3000/status || exit 1" \
     --health-interval 60s \
@@ -190,11 +192,13 @@ podman run -d \
     --health-retries 5 \
     sharelatex/sharelatex:latest
 
+# TODO SMTP configuration for email notifications
+
 # Deploy OAuth2-Proxy container
 echo "🔐 Deploying Google OAuth2-Proxy container..."
 podman run -d \
     --pod "$POD_NAME" \
-    --name google-oauth-overleaf \
+    --name overleaf-google-oauth \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
