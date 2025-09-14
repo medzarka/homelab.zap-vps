@@ -67,43 +67,6 @@ RUN mkdir -p /config/.ssh && \
 RUN mkdir -p /config/workspace && \
     chown -R abc:abc /config
 
-# Create init script for VSCode extensions
-RUN cat > /init-dev-env.sh << "EOF"
-#!/bin/bash
-echo "🚀 Initializing VSCode development environment..."
-
-# VSCode Extensions to install/update
-EXTENSIONS=(
-    ms-python.python
-    ms-toolsai.jupyter
-    redhat.java
-    vscjava.vscode-java-pack
-    ms-vscode.cpptools
-    ms-vscode.cmake-tools
-    James-Yu.latex-workshop
-    yzhang.markdown-all-in-one
-    ms-vscode.vscode-json
-    esbenp.prettier-vscode
-    bradlc.vscode-tailwindcss
-)
-
-# Install extensions (they will persist in mounted /config)
-echo "📦 Installing/updating VSCode extensions..."
-for ext in "${EXTENSIONS[@]}"; do
-    if ! code-server --list-extensions | grep -q "^$ext\$"; then
-        echo "  Installing: $ext"
-        code-server --install-extension "$ext" || echo "  Failed to install: $ext"
-    else
-        echo "  Already installed: $ext"
-    fi
-    sleep 1
-done
-
-echo "✅ Extensions installation completed!"
-echo "🎉 VSCode development environment ready!"
-EOF
-
-RUN chmod +x /init-dev-env.sh
 '
 
 # Check if network exists
