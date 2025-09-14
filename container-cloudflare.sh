@@ -36,8 +36,8 @@ podman run -d \
     --label homepage.name="Cloudflare Tunnel" \
     --label homepage.icon="cloudflare" \
     --label homepage.href="https://one.dash.cloudflare.com" \
-    --label homepage.description="Secure tunnel to zap-vps homelab services" \
-    --health-cmd "curl -f http://localhost:2000/ready || exit 1" \
+    --label homepage.description="Secure tunnel to homelab services" \
+    --health-cmd "cloudflared tunnel --metrics 127.0.0.1:2000 ready" \
     --health-interval 60s \
     --health-timeout 10s \
     --health-retries 3 \
