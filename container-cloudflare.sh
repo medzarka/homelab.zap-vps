@@ -9,6 +9,8 @@ echo "☁️ Starting Cloudflare Tunnel deployment..."
 
 # Create directory
 mkdir -p ~/podman_data/cloudflare
+sudo chown -R mgrsys:mgrsys ~/podman_data/cloudflare
+
 
 # Create environment file
 cat > ~/podman_data/cloudflare/.env << 'EOF'
@@ -34,12 +36,12 @@ podman run -d \
     --label homepage.name="Cloudflare Tunnel" \
     --label homepage.icon="cloudflare" \
     --label homepage.href="https://one.dash.cloudflare.com" \
-    --label homepage.description="Secure tunnel to homelab services" \
-    --health-cmd "cloudflared tunnel info || exit 1" \
+    --label homepage.description="Secure tunnel to zap-vps homelab services" \
+    --health-cmd "curl -f http://localhost:2000/ready || exit 1" \
     --health-interval 60s \
     --health-timeout 10s \
     --health-retries 3 \
-    cloudflare/cloudflared:latest tunnel run
+    cloudflare/cloudflared:latest tunnel --metrics 0.0.0.0:2000 run
 
 # Wait for service to start
 echo "⏳ Waiting for tunnel to start..."
