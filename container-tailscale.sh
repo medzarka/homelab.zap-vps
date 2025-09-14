@@ -56,17 +56,16 @@ systemctl --user stop container-tailscale.service 2>/dev/null || true
 podman rm -f tailscale 2>/dev/null || true
 
 # Deploy Tailscale with user mapping and custom network
-echo "🚀 Deploying Tailscale with UID mapping (0→1000) and custom network..."
+echo "🚀 Deploying Tailscale ..."
 podman run -d \
     --name tailscale \
     --restart unless-stopped \
     --memory 256m \
     --cpu-shares 512 \
     --network "host" \
+    --device=/dev/net/tun \
     --privileged \
-    --cap-add=NET_ADMIN \
-    --cap-add=NET_RAW \
-    --volume /dev/net/tun:/dev/net/tun:rw \
+    --cap-add=NET_ADMIN,NET_RAW \
     --volume ~/podman_data/tailscale/data:/var/lib/tailscale:Z \
     --secret tailscale_auth_key,type=env,target=TS_AUTHKEY \
     --env TS_STATE_DIR=/var/lib/tailscale \
