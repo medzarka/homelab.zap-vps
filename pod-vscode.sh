@@ -171,7 +171,6 @@ podman pod create \
     --name "$POD_NAME" \
     --network "$NETWORK_NAME" \
     --publish 4180:4180 \
-    --userns=keep-id:uid=1000,gid=1000 \
     --label homepage.group="Development" \
     --label homepage.name="VSCode Dev Pod" \
     --label homepage.icon="vscode" \
@@ -192,8 +191,8 @@ podman run -d \
     --env PASSWORD=$(podman run --rm --secret vscode_password alpine cat "/run/secrets/vscode_password") \
     --env SUDO_PASSWORD=$(podman run --rm --secret vscode_password alpine cat "/run/secrets/vscode_password") \
     --env DEFAULT_WORKSPACE=/config/workspace \
-    --volume ~/podman_data/vscode/config:/config:Z \
-    --volume ~/podman_data/vscode/workspace:/config/workspace:Z \
+    --volume ~/podman_data/vscode/config:/config:Z,U \
+    --volume ~/podman_data/vscode/workspace:/config/workspace:Z,U \
     --health-cmd "curl -f http://localhost:8443 || exit 1" \
     --health-interval 60s \
     --health-timeout 15s \
@@ -208,7 +207,7 @@ podman run -d \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
-    --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z" \
+    --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z,U" \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
     --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \

@@ -133,9 +133,9 @@ podman run -d \
     --cpus 1.0 \
     --env PUID=$HOST_UID \
     --env PGID=$HOST_GID \
-    --volume ~/podman_data/overleaf/mongo/db:/data/db:Z \
-    --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z \
-    --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z \
+    --volume ~/podman_data/overleaf/mongo/db:/data/db:Z,U \
+    --volume ~/podman_data/overleaf/mongo/configdb:/data/configdb:Z,U \
+    --volume ~/podman_data/overleaf/mongo/init:/docker-entrypoint-initdb.d:Z,U \
     --health-cmd "mongosh --eval 'load(\"/docker-entrypoint-initdb.d/healthcheck.js\")'" \
     --health-interval 60s \
     --health-timeout 10s \
@@ -153,7 +153,7 @@ podman run -d \
     --cpus 0.5 \
     --env PUID=$HOST_UID \
     --env PGID=$HOST_GID \
-    --volume ~/podman_data/overleaf/redis/data:/data:Z \
+    --volume ~/podman_data/overleaf/redis/data:/data:Z,U \
     --health-cmd "redis-cli ping" \
     --health-interval 60s \
     --health-timeout 5s \
@@ -183,7 +183,7 @@ podman run -d \
     --env OVERLEAF_NAV_TITLE="ZAP-VPS LaTeX Editor" \
     --env ENABLED_LINKED_FILE_TYPES=url,project_file \
     --env ENABLE_CONVERSIONS=true \
-    --volume ~/podman_data/overleaf/overleaf/data:/var/lib/sharelatex:Z \
+    --volume ~/podman_data/overleaf/overleaf/data:/var/lib/sharelatex:Z,U \
     --health-cmd "curl -f http://localhost:3000/status || exit 1" \
     --health-interval 60s \
     --health-timeout 10s \
@@ -198,7 +198,7 @@ podman run -d \
     --memory 128m \
     --cpu-shares 256 \
     --cpus 0.5 \
-    --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z" \
+    --volume "${OAUTH_EMAILS_FILE}:/etc/oauth2_proxy/emails.txt:ro,Z,U" \
     --env OAUTH2_PROXY_CLIENT_ID=$(podman run --rm --secret google_oauth_client_id alpine cat "/run/secrets/google_oauth_client_id") \
     --env OAUTH2_PROXY_CLIENT_SECRET=$(podman run --rm --secret google_oauth_client_secret alpine cat "/run/secrets/google_oauth_client_secret") \
     --env OAUTH2_PROXY_COOKIE_SECRET=$(python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())') \
