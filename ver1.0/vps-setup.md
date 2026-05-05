@@ -1,5 +1,58 @@
 # Oracle Linux Installation & Hardening Guide (BIOS / netboot.xyz)
 
+## Quick Start for Oracle Linux 10 (Minimal Install)
+
+Use the scripts in this repository for the first bootstrap after installation.
+
+1. Run the OS bootstrap as root:
+
+```bash
+cd ~/homelab.zap-vps/ver1.0
+chmod +x ol10-first-setup.sh
+sudo ADMIN_USER=mgrsys \
+    ADMIN_PUBKEY="ssh-ed25519 AAAA...your-key..." \
+    SSH_PORT=22 \
+    COCKPIT_ALLOWED_CIDR="YOUR.PUBLIC.IP/32" \
+    ./ol10-first-setup.sh
+```
+
+2. Deploy Cloudflare tunnel as the non-root user (`mgrsys`):
+
+```bash
+cd ~/homelab.zap-vps/ver1.0
+chmod +x container-cloudflare.sh
+./container-cloudflare.sh
+```
+
+3. Reuse the Podman deployment template for future containers:
+
+```bash
+cd ~/homelab.zap-vps/ver1.0
+chmod +x podman-droplet-template.sh
+
+APP_NAME=gitea \
+IMAGE=docker.io/gitea/gitea:latest \
+PUBLISH_PORT=3000:3000 \
+HOST_DATA_DIR="$HOME/podman_data/gitea/data" \
+CONTAINER_DATA_DIR=/data \
+./podman-droplet-template.sh
+```
+
+### Notes for Common Podman Issues
+
+- SELinux permission denied on volumes:
+    - Use `:Z` or `:z` on volume mounts.
+    - Restore labels with `sudo restorecon -Rv ~/podman_data`.
+- Rootless ownership mismatch:
+    - Use `--userns keep-id`.
+    - Fix ownership with `podman unshare chown -R 1000:1000 ~/podman_data/<app>`.
+- systemd user services stop after logout:
+    - Enable lingering once as root: `sudo loginctl enable-linger mgrsys`.
+- Binding to privileged ports (`80`, `443`) in rootless mode:
+    - Raise limit with `sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80` and persist under `/etc/sysctl.d/`.
+
+---
+
 ## Overview
 
 This guide describes installing **Oracle Linux 9** on a BIOS‑only server via [`netboot.xyz`](https://netboot.xyz), applying a secure baseline, creating the `mgrsys` admin account with password and SSH public key, enabling **Cockpit** with **Podman** and file sharing, switching to the **Unbreakable Enterprise Kernel (UEK)**, and optionally upgrading to **Oracle Linux 10** if the CPU supports the **x86‑64‑v3** baseline.
