@@ -23,7 +23,7 @@ REDIS_NAME="${REDIS_NAME:-${STACK_NAME}-redis}"
 
 NETWORK_NAME="${NETWORK_NAME:-zap-vps-podman-network}"
 OVERLEAF_IMAGE="${OVERLEAF_IMAGE:-docker.io/sharelatex/sharelatex:latest}"
-MONGO_IMAGE="${MONGO_IMAGE:-docker.io/library/mongo:6}"
+MONGO_IMAGE="${MONGO_IMAGE:-docker.io/library/mongo:8}"
 REDIS_IMAGE="${REDIS_IMAGE:-docker.io/library/redis:7-alpine}"
 
 OVERLEAF_BIND="${OVERLEAF_BIND:-8081:80}"
@@ -126,7 +126,7 @@ ContainerName=${MONGO_NAME}
 Pull=always
 Network=${NETWORK_NAME}
 Volume=${HOST_MONGO_DIR}:/data/db:Z
-Exec=--bind_ip_all
+Exec=mongod --bind_ip_all --replSet rs0
 EOF
 
   append_resource_limits "$file" "$MONGO_MEMORY_LIMIT" "$MONGO_CPU_SHARES"
@@ -231,6 +231,32 @@ reload_and_start_quadlet() {
   systemctl --user start "${MONGO_NAME}.service"
   systemctl --user start "${REDIS_NAME}.service"
   systemctl --user start "${APP_NAME}.service"
+
+  # Wait for MongoDB to be ready and initiate replica set if needed
+  log "Waiting for MongoDB to be ready..."
+  for i in {1..30}; do
+    if podman exec "${MONGO_NAME}" mongo --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+  if ! podman exec "${MONGO_NAME}" mongo --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
+    fail "MongoDB did not become ready in time."
+  fi
+
+  # Initiate replica set if not already initiated
+  if ! podman exec "${MONGO_NAME}" mongo --quiet --eval 'rs.status().ok' 2>/dev/null | grep -q '^1$'; then
+    log "Initiating MongoDB single-node replica set..."
+    podman exec "${MONGO_NAME}" mongo --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"'${MONGO_NAME}':27017"}]})' || true
+    # Wait for replica set to become PRIMARY
+    for i in {1..15}; do
+      if podman exec "${MONGO_NAME}" mongo --quiet --eval 'rs.isMaster().ismaster' 2>/dev/null | grep -q '^true$'; then
+        log "MongoDB replica set is PRIMARY."
+        break
+      fi
+      sleep 2
+    done
+  fi
 
   # Check for s6 permission errors in Overleaf logs (if present)
   if podman logs "$APP_NAME" 2>&1 | grep -q 's6-svscan: fatal: unable to open .s6-svscan/lock: Permission denied'; then
